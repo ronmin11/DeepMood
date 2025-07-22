@@ -1,1 +1,23 @@
-torch==2.3.1
+# PyTorch (minimum version 1.1.0)
+torch>=2.7.0
+
+# torchvision version that matches PyTorch 1.4.0–1.5.0 (use 0.5.0 as you requested)
+torchvision==0.22.0
+
+# OpenCV
+opencv-python
+
+# tqdm progress bar
+tqdm
+
+# Pillow (image processing, replaces PIL)
+Pillow
+
+#Pandas for data
+Pandas
+
+#Timm
+Timm
+
+#tqdm for visual bar progression
+tqdm
