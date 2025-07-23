@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Emotion Tracker AI</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f4f8;
+      padding: 20px;
+    }
+
+    video {
+      border: 2px solid #333;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎭 Real-Time Emotion Tracker</h1>
+  <video id="webcam" autoplay playsinline width="640" height="480"></video>
+  <p>Detected Emotion: <span id="emotion">Detecting...</span></p>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+
+  <script>
+    const URL = "https://teachablemachine.withgoogle.com/models/YOUR_MODEL_URL/"; // Replace this!
+
+    let model, webcam, maxPredictions;
+
+    const webcamElement = document.getElementById("webcam");
+    const emotionText = document.getElementById("emotion");
+
+    async function init() {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        const flip = true;
+        webcam = new tmImage.Webcam(640, 480, flip);
+        await webcam.setup();
+        await webcam.play();
+        window.requestAnimationFrame(loop);
+
+        document.getElementById("webcam").appendChild(webcam.canvas);
+    }
+
+    async function loop() {
+        webcam.update();
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+        const prediction = await model.predict(webcam.canvas);
+        let highest = prediction[0];
+
+        prediction.forEach((p) => {
+            if (p.probability > highest.probability) {
+                highest = p;
+            }
+        });
+
+        emotionText.innerText = `${highest.className} (${(highest.probability * 100).toFixed(1)}%)`;
+    }
+
+    init();
+  </script>
+</body>
+</html>
