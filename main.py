@@ -3,6 +3,11 @@ import argparse, os, glob, time
 from trainer import Trainer
 from image_loader import get_image_dataloaders
 
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score
+from IPython.display import display, clear_output
+
 def get_args():
     parser = argparse.ArgumentParser()
 
@@ -39,8 +44,10 @@ def main(args):
             return
         s.loadParameters(args.eval_model_path)
         print("Parameters loaded from path", args.eval_model_path)
-        mAP = s.evaluate_network(loader=valLoader)
-        print("mAP %2.2f%%" % (mAP))
+        # mAP = s.evaluate_network(loader=valLoader)
+        val_avg_loss, val_accuracy, val_f1 = s.evaluate_network(loader=valLoader)
+        # print("mAP %2.2f%%" % (mAP))
+        print(f"Eval - Val Loss: {val_avg_loss:.4f}, Val Accuracy: {val_accuracy:.2f}%, F1 Score: {val_f1:.2f}")
         return
 
     args.modelSavePath = os.path.join(args.savePath, 'model')
@@ -60,23 +67,45 @@ def main(args):
         s = Trainer(args, epoch=epoch)
 
     mAPs = []
-    scoreFile = open(args.scoreSavePath, "a+")
     bestmAP = 0
+    scoreFile = open(args.scoreSavePath, "a+")
 
     while epoch <= args.epochs:
-        loss, lr = s.train_network(epoch=epoch, loader=trainLoader)
-        
+        train_loss, train_acc, lr = s.train_network(epoch=epoch, loader=trainLoader)
+
         if epoch % args.testInterval == 0:
-            mAP = s.evaluate_network(epoch=epoch, loader=valLoader)
+            val_loss, val_acc, val_f1 = s.evaluate_network(epoch=epoch, loader=valLoader)
+            mAP = val_acc  # use validation accuracy as "mAP" proxy
             mAPs.append(mAP)
+
+            # Log metrics to dataframe
+            s.logs_df.loc[len(s.logs_df)] = {
+                "Epoch": epoch,
+                "Train Loss": train_loss,
+                "Train Accuracy": train_acc,
+                "Val Loss": val_loss,
+                "Val Accuracy": val_acc,
+                "F1 Score": val_f1
+            }
+
             if mAP > bestmAP:
                 bestmAP = mAP
                 s.saveParameters(f"{args.modelSavePath}/best.model")
-            print(time.strftime("%Y-%m-%d %H:%M:%S"), f"{epoch} epoch, mAP {mAP:.2f}%, bestmAP {bestmAP:.2f}%")
-            scoreFile.write(f"{epoch} epoch, LR {lr}, LOSS {loss:.4f}, mAP {mAP:.2f}%, bestmAP {bestmAP:.2f}%\n")
+
+            print(time.strftime("%Y-%m-%d %H:%M:%S"),
+                  f"{epoch} epoch, LR {lr:.6f}, LOSS {train_loss:.4f}, "
+                  f"Val Acc {val_acc:.2f}%, F1 {val_f1:.2f}%, Best Acc {bestmAP:.2f}%")
+
+            scoreFile.write(
+                f"{epoch} epoch, LR {lr:.6f}, LOSS {train_loss:.4f}, "
+                f"Val Loss {val_loss:.4f}, Val Acc {val_acc:.2f}%, F1 {val_f1:.2f}%, Best Acc {bestmAP:.2f}%\n"
+            )
             scoreFile.flush()
 
         epoch += 1
+
+    scoreFile.close()
+    s.plot_metrics()
 
 
 if __name__ == "__main__":
