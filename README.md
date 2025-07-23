@@ -12,3 +12,7 @@ _____________
 
 # Working demonstration real-time camera feed
 _____________________________________
+
+
+# Info
+Emotion Detection & Classification task using multiple Machine Learning algorithms, such as CNN's, k-means clustering, naive bayes, SVM's, as well as utilizing many pretrained architectures including Resnet50, VGG19, and more. It also presents a novel combination of all of these as well as a chatbot tailored to your specific needs. This is meant to be able to provide simulated theraptic suggestions, and is NOT meant to serve as an actual therapist. One should always consult a verified professional therapist to obtain the most reliable feedback.
