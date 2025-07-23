@@ -21,3 +21,12 @@ Timm
 
 #tqdm for visual bar progression
 tqdm
+
+#sklearn for graphs
+scikit-learn
+
+#matplotlib for graphs
+matplotlib
+
+#seaborn for easy graphs
+seaborn
