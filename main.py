@@ -16,8 +16,13 @@ def get_args():
     parser.add_argument("--loadNumImages", type=int, default=100, help="Max images to load per class. Use -1 to load all.")
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_workers', type=int, default=2) #4 is too much for google colab to handle
+<<<<<<< HEAD
     parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--lr_decay', type=float, default=0.95)
+=======
+    parser.add_argument('--lr', type=float, default=0.00021)
+    parser.add_argument('--lr_decay', type=float, default=0.96)
+>>>>>>> 71096eac3e7dea17876a975d392c38bad7b2c777
     parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--dataset_path', type=str, default='EmotionDataset')
     parser.add_argument('--savePath', type=str, default='checkpoints')
