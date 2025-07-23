@@ -12,7 +12,7 @@ from model import MoodCNN  # <- this is your custom model, no timm
 class Trainer:
     def __init__(self, args, epoch=1):
         self.args = args
-        self.epoch = epoch
+        self.epoch = args.epochs
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
