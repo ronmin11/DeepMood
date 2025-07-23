@@ -31,14 +31,25 @@ class Trainer:
         
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=args.lr_decay)
-        self.criterion = nn.CrossEntropyLoss()
+        # self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1) #to help the model avoid overconfidence, improving generalization
+
+        if args.freeze_params and epoch <= 5:
+            for param in self.model.backbone.parameters():
+                param.requires_grad = False  # Freeze backbone
 
         # Logging DataFrame: logs everything you asked for
         self.logs_df = pd.DataFrame(columns=["Epoch", "Train Loss", "Train Accuracy", "Val Loss", "Val Accuracy", "F1 Score"])
 
+
     def train_network(self, epoch, loader, **kwargs):
         self.model.train()
         total_loss, correct, total = 0, 0, 0
+
+        if self.args.freeze_params and self.epoch == 6:  # unfreeze after 5 epochs
+            print("Unfreezing backbone...")
+            for param in self.model.backbone.parameters():
+                param.requires_grad = True
 
         loop = tqdm(loader, desc=f"Epoch {epoch} [Training]", leave=False)
         for imgs, labels in loop:
