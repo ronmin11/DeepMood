@@ -119,6 +119,13 @@ backbone_model = timm.create_model(
     num_classes = 7,
 )
 
+# effNet = timm.create_model(
+#     "efficientnetv2_m.in21k_ft_in1k", 
+#     pretrained=True, 
+#     num_classes = 7
+# )
+
+
 class MoodCNN(nn.Module):
     def __init__(self, num_classes=7):
         super(MoodCNN, self).__init__()
@@ -165,7 +172,14 @@ class EmotionNet(nn.Module):
     def __init__(self, backbone, num_classes):
         super(EmotionNet, self).__init__()
         self.backbone = backbone
-        self.classifier = nn.Linear(backbone.num_features, num_classes)
+        # self.classifier = nn.Linear(backbone.num_features, num_classes)
+        self.classifier = nn.Sequential(
+            nn.Dropout(0.5),
+            nn.Linear(backbone.num_features, 512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(512, num_classes)
+        )
 
     def forward(self, x):
         x = self.backbone(x)

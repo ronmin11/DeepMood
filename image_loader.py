@@ -18,7 +18,26 @@ def get_image_dataloaders(dataset_path, batch_size, num_workers, loadNumImages=-
         # Load model-specific transform
         model = timm.create_model(model_name, pretrained=True, num_classes=0)
         data_config = timm.data.resolve_model_data_config(model)
-        transform = timm.data.create_transform(**data_config, is_training=False)
+        # transform = timm.data.create_transform(**data_config, is_training=False)
+        train_transform = timm.data.create_transform(**data_config, is_training=True)
+        test_transform = timm.data.create_transform(**data_config, is_training=False)
+
+        # train_transform = transforms.Compose([
+        #     transforms.RandomResizedCrop(224),
+        #     transforms.RandomHorizontalFlip(),
+        #     transforms.ColorJitter(0.3, 0.3, 0.3, 0.1),
+        #     transforms.RandomAffine(degrees=15),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(data_config['mean'], data_config['std']),
+        #     # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        # ])
+
+        # test_transform = transforms.Compose([
+        #     transforms.Resize((224, 224)),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(data_config['mean'], data_config['std']),
+        #     # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        # ])
     else:
         return ValueError("Model not found")
 
@@ -36,8 +55,8 @@ def get_image_dataloaders(dataset_path, batch_size, num_workers, loadNumImages=-
     train_path = os.path.join(dataset_path, 'train')
     test_path = os.path.join(dataset_path, 'test')
 
-    train_dataset = datasets.ImageFolder(train_path, transform=transform)
-    test_dataset = datasets.ImageFolder(test_path, transform=transform)
+    train_dataset = datasets.ImageFolder(train_path, transform=train_transform)
+    test_dataset = datasets.ImageFolder(test_path, transform=test_transform)
 
     train_dataset = limit_dataset(train_dataset)
     test_dataset = limit_dataset(test_dataset)
