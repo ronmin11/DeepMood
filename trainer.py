@@ -2,7 +2,7 @@
 import os, torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model import EmotionNet
+from model import EmotionNet #COMMENT IF USING COLAB
 from tqdm import tqdm
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,45 +11,39 @@ from IPython.display import display, clear_output
 from sklearn.metrics import f1_score
 
 import timm
-from model import MoodCNN  # <- this is your custom model, no timm
+from model import MoodCNN2  # <- this is your custom model, no timm. COMMENT IF USING COLAB
 
 
 class Trainer:
-    def __init__(self, args, epoch=1):
+    def __init__(self, args, train_loader=None, epoch=1):
         self.args = args
         self.epoch = args.epochs
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if args.model_name == 'custom':
-            self.model = MoodCNN(num_classes=args.num_classes).to(self.device)
+            self.model = MoodCNN2(num_classes=args.num_classes).to(self.device)
         elif args.model_name == 'resnet50.a1_in1k':
             backbone = timm.create_model(args.model_name, pretrained=True, num_classes=0)
             self.model = EmotionNet(backbone, args.num_classes).to(self.device)
         else:
             raise ValueError("Model not found")
-        
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=args.lr_decay)
+
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr)
+        # self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=args.lr_decay)
         # self.criterion = nn.CrossEntropyLoss()
-        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1) #to help the model avoid overconfidence, improving generalization
 
-        if args.freeze_params and epoch <= 5:
-            for param in self.model.backbone.parameters():
-                param.requires_grad = False  # Freeze backbone
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=args.lr_decay)
+        self.criterion = nn.CrossEntropyLoss()
 
-        # Logging DataFrame: logs everything you asked for
+        # Logging DataFrame
         self.logs_df = pd.DataFrame(columns=["Epoch", "Train Loss", "Train Accuracy", "Val Loss", "Val Accuracy", "F1 Score"])
 
 
     def train_network(self, epoch, loader, **kwargs):
         self.model.train()
         total_loss, correct, total = 0, 0, 0
-
-        if self.args.freeze_params and self.epoch == 6:  # unfreeze after 5 epochs
-            print("Unfreezing backbone...")
-            for param in self.model.backbone.parameters():
-                param.requires_grad = True
 
         loop = tqdm(loader, desc=f"Epoch {epoch} [Training]", leave=False)
         for imgs, labels in loop:
@@ -95,14 +89,27 @@ class Trainer:
 
                 all_preds.extend(predicted.cpu().numpy())
                 all_labels.extend(labels.cpu().numpy())
-                
+
                 loop.set_postfix(accuracy=f"{(correct/total)*100:.2f}%")
-                
+
         avg_loss = total_loss / len(loader)
         accuracy = (correct / total) * 100.0
         f1 = f1_score(all_labels, all_preds, average='weighted') * 100.0
+
+        # Add confusion matrix
+        from sklearn.metrics import confusion_matrix
+        cm = confusion_matrix(all_labels, all_preds)
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=loader.dataset.classes,
+                    yticklabels=loader.dataset.classes)
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title('Confusion Matrix')
+        plt.show()
+
         return avg_loss, accuracy, f1
-    
+
     def log_metrics(self, epoch, train_loss, train_acc, val_loss, val_acc, f1):
         new_row = {
             "Epoch": epoch,
