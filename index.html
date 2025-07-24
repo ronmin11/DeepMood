@@ -1,95 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>AI Image Classifier</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Tailwind CSS via CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React + ReactDOM via CDN -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Babel for JSX transformation -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  </head>
-  <body class="bg-gray-100 p-8">
-    <div id="root"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App</title>
+  <link rel="stylesheet" href="global.css" />
+</head>
+<body>
+  <div id="root">
+    <!-- This would be dynamically injected by React in a real app -->
+    <div class="tooltip-provider">
+      <div class="toaster"></div>
+      <div class="sonner"></div>
 
-    <script type="text/babel">
-      const { useState } = React;
-
-      function App() {
-        const [image, setImage] = useState(null);
-        const [previewUrl, setPreviewUrl] = useState(null);
-        const [result, setResult] = useState("");
-        const [loading, setLoading] = useState(false);
-
-        const handleFileChange = (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            setImage(file);
-            setPreviewUrl(URL.createObjectURL(file));
-          }
-        };
-
-        const handleSubmit = async () => {
-          if (!image) return;
-          setLoading(true);
-          const formData = new FormData();
-          formData.append("file", image);
-
-          try {
-            const response = await fetch("http://localhost:8000/predict", {
-              method: "POST",
-              body: formData,
-            });
-            const data = await response.json();
-            setResult(data.label);
-          } catch (err) {
-            console.error(err);
-            setResult("Error occurred.");
-          } finally {
-            setLoading(false);
-          }
-        };
-
-        return (
-          <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-lg space-y-4">
-            <h1 className="text-2xl font-bold">AI Image Classifier</h1>
-
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="block w-full"
-            />
-
-            {previewUrl && (
-              <img
-                src={previewUrl}
-                alt="Preview"
-                className="w-full h-auto rounded"
-              />
-            )}
-
-            <button
-              onClick={handleSubmit}
-              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-            >
-              {loading ? "Predicting..." : "Predict"}
-            </button>
-
-            {result && (
-              <div className="text-center text-xl font-semibold text-green-700">
-                Prediction: {result}
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      const root = ReactDOM.createRoot(document.getElementById("root"));
-      root.render(<App />);
-    </script>
-  </body>
+      <!-- Simulated routing content -->
+      <div class="page">
+        <!-- Replace this with Index.html content or NotFound.html as needed -->
+        <h1>Welcome to the Home Page</h1>
+      </div>
+    </div>
+  </div>
+</body>
 </html>
