@@ -2,23 +2,74 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <title>AI Image Classifier</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>App</title>
-  <link rel="stylesheet" href="global.css" />
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <div id="root">
-    <!-- This would be dynamically injected by React in a real app -->
-    <div class="tooltip-provider">
-      <div class="toaster"></div>
-      <div class="sonner"></div>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full space-y-4 text-center">
+    <h1 class="text-2xl font-bold text-gray-800">AI Image Classifier</h1>
 
-      <!-- Simulated routing content -->
-      <div class="page">
-        <!-- Replace this with Index.html content or NotFound.html as needed -->
-        <h1>Welcome to the Home Page</h1>
-      </div>
-    </div>
+    <input
+      type="file"
+      id="imgUpload"
+      accept="image/*"
+      class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+    />
+
+    <img id="preview" class="w-full rounded mt-4 hidden" alt="Image Preview" />
+
+    <button
+      onclick="predictImage()"
+      class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition"
+    >
+      Predict
+    </button>
+
+    <p id="result" class="text-lg font-medium text-green-600"></p>
   </div>
+
+  <script>
+    const apiUrl = "https://your-model-api.com/predict"; // Replace with your backend URL
+
+    function predictImage() {
+      const fileInput = document.getElementById("imgUpload");
+      const file = fileInput.files[0];
+      const preview = document.getElementById("preview");
+      const result = document.getElementById("result");
+
+      if (!file) {
+        result.innerText = "Please select an image.";
+        return;
+      }
+
+      // Preview
+      const reader = new FileReader();
+      reader.onload = () => {
+        preview.src = reader.result;
+        preview.classList.remove("hidden");
+      };
+      reader.readAsDataURL(file);
+
+      result.innerText = "Predicting...";
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      fetch(apiUrl, {
+        method: "POST",
+        body: formData,
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          result.innerText = "Prediction: " + data.label;
+        })
+        .catch((err) => {
+          console.error(err);
+          result.innerText = "Prediction failed.";
+        });
+    }
+  </script>
 </body>
 </html>
