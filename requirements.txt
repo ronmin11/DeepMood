@@ -30,3 +30,8 @@ matplotlib
 
 #seaborn for easy graphs
 seaborn
+
+#camera
+# opencv-python 
+opencv-python-headless
+facenet-pytorch

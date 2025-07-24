@@ -1,7 +1,8 @@
 # main.py
-import argparse, os, glob, time
-from trainer import Trainer
-from image_loader import get_image_dataloaders
+import argparse, os, glob, time, sys
+from trainer import Trainer #COMMENT IF USING COLAB
+from image_loader import get_image_dataloaders #COMMENT IF USING COLAB
+import numpy as np
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,20 +14,27 @@ def get_args():
 
     parser.add_argument('--model_name', type=str, default='resnet50.a1_in1k', help="Backbone model name from timm")
     parser.add_argument('--num_classes', type=int, default=7, help="Number of emotion classes")
-    parser.add_argument("--loadNumImages", type=int, default=100, help="Max images to load per class. Use -1 to load all.")
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument("--loadNumImages", type=int, default=-1, help="Max images to load per class. Use -1 to load all.")
+    parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--num_workers', type=int, default=2) #4 is too much for google colab to handle
-    parser.add_argument('--lr', type=float, default=3e-4)
+    parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--lr_decay', type=float, default=0.95)
-    parser.add_argument('--epochs', type=int, default=5)
-    parser.add_argument('--dataset_path', type=str, default='EmotionDataset')
+    parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--dataset_path', type=str, default='/content/EmotionDataset')
     parser.add_argument('--savePath', type=str, default='checkpoints')
     parser.add_argument('--testInterval', type=int, default=1)
     parser.add_argument('--evaluation', action='store_true')
     parser.add_argument('--eval_model_path', type=str, default='path not specified')
     parser.add_argument('--freeze_params', type=bool, default=True)
-    
-    return parser.parse_args()
+
+    # return parser.parse_args()
+
+    # Check if we're in an interactive environment like Colab
+    if hasattr(sys, 'ps1') or 'ipykernel' in sys.modules:
+        return parser.parse_args(args=[])
+    else:
+        return parser.parse_args()
 
 
 def main(args):
@@ -37,6 +45,10 @@ def main(args):
         loadNumImages=args.loadNumImages,
         model_name=args.model_name
     )
+
+    # # After creating datasets in main.py
+    # class_names = trainLoader.dataset.classes
+    # np.save('class_names.npy', class_names)
 
     if args.evaluation:
         s = Trainer(args)
