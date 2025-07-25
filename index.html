@@ -88,6 +88,7 @@
     async function runFaceDetection() {
       const canvas = overlay;
       faceapi.matchDimensions(canvas, displaySize);
+      let lastSent = 0;
       setInterval(async () => {
         if (video.readyState === 4) {
           const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks(true);
@@ -96,14 +97,48 @@
           faceapi.draw.drawDetections(canvas, resizedDetections);
           faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
           faceStatus.innerText = detections.length > 0 ? `Faces detected: ${detections.length}` : 'No face detected.';
+
+          // If a face is detected, send frame every 2 seconds
+          if (detections.length > 0 && Date.now() - lastSent > 2000) {
+            sendFrameToBackend();
+            lastSent = Date.now();
+          }
         }
       }, 200);
     }
 
-    // Placeholder for sending frames to backend for emotion prediction
-    function sendFrameToBackend(imageData) {
-      // TODO: Implement fetch to /predict endpoint
-      // Example: fetch('/predict', { method: 'POST', body: ... })
+    // Send current video frame to backend for emotion prediction
+    function sendFrameToBackend() {
+      const emotionResult = document.getElementById('emotion-result');
+      try {
+        // Create a temporary canvas to capture the frame
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth;
+        tempCanvas.height = video.videoHeight;
+        const ctx = tempCanvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        tempCanvas.toBlob(async (blob) => {
+          if (!blob) return;
+          const formData = new FormData();
+          formData.append('image', blob, 'frame.jpg');
+          try {
+            const response = await fetch('/predict', {
+              method: 'POST',
+              body: formData
+            });
+            if (response.ok) {
+              const data = await response.json();
+              emotionResult.textContent = data.emotion || '-';
+            } else {
+              emotionResult.textContent = '-';
+            }
+          } catch (err) {
+            emotionResult.textContent = '-';
+          }
+        }, 'image/jpeg');
+      } catch (err) {
+        emotionResult.textContent = '-';
+      }
     }
 
     window.addEventListener('DOMContentLoaded', loadModels);
