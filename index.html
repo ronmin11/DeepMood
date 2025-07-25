@@ -2,74 +2,102 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>AI Image Classifier</title>
+  <title>DeepMood</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- face-api.js via CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
-  <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full space-y-4 text-center">
-    <h1 class="text-2xl font-bold text-gray-800">AI Image Classifier</h1>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-3xl mx-auto py-10 space-y-16">
+    <!-- Section 1: Title -->
+    <section class="text-center">
+      <h1 class="text-5xl font-extrabold text-blue-700 mb-2">DeepMood</h1>
+    </section>
 
-    <input
-      type="file"
-      id="imgUpload"
-      accept="image/*"
-      class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-    />
+    <!-- Section 2: Description -->
+    <section class="bg-white rounded-lg shadow p-6">
+      <h2 class="text-2xl font-bold mb-4 text-gray-800">About DeepMood</h2>
+      <p class="text-gray-700 text-lg">
+        This novel implementation aims to address the lack of empathy and emotional awareness in everyday interactions. When individuals struggle to recognize or understand others' emotions, it can contribute to feelings of isolation, loneliness, or depression in those who go unnoticed or misunderstood. A potential remedy for this issue would be to utilize machine-learning-based emotion classifiers with CNN architectures and fully connected layers to efficiently and effectively determine the emotional state of an individual given a live feed from glasses. This could develop into more practical uses, such as in real-world hospitals for improved psychological therapy diagnosis.
+      </p>
+    </section>
 
-    <img id="preview" class="w-full rounded mt-4 hidden" alt="Image Preview" />
+    <!-- Section 3: AI Model Application (Face Tracking) -->
+    <section class="bg-white rounded-lg shadow p-6">
+      <h2 class="text-2xl font-bold mb-4 text-gray-800">AI Face Tracking Demo</h2>
+      <p class="mb-4 text-gray-600">Allow camera access to see real-time face tracking in action.</p>
+      <div class="flex flex-col items-center">
+        <video id="video" width="480" height="360" autoplay muted class="rounded border"></video>
+        <canvas id="overlay" width="480" height="360" class="absolute left-0 top-0"></canvas>
+      </div>
+      <p id="face-status" class="mt-4 text-blue-600 font-semibold"></p>
+    </section>
 
-    <button
-      onclick="predictImage()"
-      class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition"
-    >
-      Predict
-    </button>
-
-    <p id="result" class="text-lg font-medium text-green-600"></p>
+    <!-- Section 4: Contact -->
+    <section class="bg-white rounded-lg shadow p-6">
+      <h2 class="text-2xl font-bold mb-4 text-gray-800">Contact</h2>
+      <form class="space-y-4">
+        <div>
+          <label class="block text-gray-700">Name</label>
+          <input type="text" class="w-full border rounded px-3 py-2" required />
+        </div>
+        <div>
+          <label class="block text-gray-700">Email</label>
+          <input type="email" class="w-full border rounded px-3 py-2" required />
+        </div>
+        <div>
+          <label class="block text-gray-700">Message</label>
+          <textarea class="w-full border rounded px-3 py-2" rows="4" required></textarea>
+        </div>
+        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded transition">Send</button>
+      </form>
+    </section>
   </div>
 
   <script>
-    const apiUrl = "https://your-model-api.com/predict"; // Replace with your backend URL
+    // Face tracking using face-api.js
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const faceStatus = document.getElementById('face-status');
+    let displaySize = { width: 480, height: 360 };
 
-    function predictImage() {
-      const fileInput = document.getElementById("imgUpload");
-      const file = fileInput.files[0];
-      const preview = document.getElementById("preview");
-      const result = document.getElementById("result");
-
-      if (!file) {
-        result.innerText = "Please select an image.";
-        return;
+    async function setupCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+      } catch (err) {
+        faceStatus.innerText = 'Camera access denied or not available.';
       }
-
-      // Preview
-      const reader = new FileReader();
-      reader.onload = () => {
-        preview.src = reader.result;
-        preview.classList.remove("hidden");
-      };
-      reader.readAsDataURL(file);
-
-      result.innerText = "Predicting...";
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      fetch(apiUrl, {
-        method: "POST",
-        body: formData,
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          result.innerText = "Prediction: " + data.label;
-        })
-        .catch((err) => {
-          console.error(err);
-          result.innerText = "Prediction failed.";
-        });
     }
+
+    async function loadModels() {
+      faceStatus.innerText = 'Loading face detection models...';
+      await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/models');
+      await faceapi.nets.faceLandmark68TinyNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/models');
+      faceStatus.innerText = 'Models loaded. Initializing camera...';
+      await setupCamera();
+      faceStatus.innerText = 'Camera ready. Detecting faces...';
+      runFaceDetection();
+    }
+
+    async function runFaceDetection() {
+      const canvas = overlay;
+      faceapi.matchDimensions(canvas, displaySize);
+      setInterval(async () => {
+        if (video.readyState === 4) {
+          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks(true);
+          const resizedDetections = faceapi.resizeResults(detections, displaySize);
+          canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+          faceapi.draw.drawDetections(canvas, resizedDetections);
+          faceapi.draw.drawFaceLandmarks(canvas, resizedDetections);
+          faceStatus.innerText = detections.length > 0 ? `Faces detected: ${detections.length}` : 'No face detected.';
+        }
+      }, 200);
+    }
+
+    window.addEventListener('DOMContentLoaded', loadModels);
   </script>
 </body>
 </html>
