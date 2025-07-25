@@ -96,8 +96,8 @@
     async function loadModels() {
       faceStatus.innerText = 'Loading face detection models...';
       try {
-        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/models');
-        await faceapi.nets.faceLandmark68TinyNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/models');
+        await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+        await faceapi.nets.faceLandmark68TinyNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
         faceStatus.innerText = 'Models loaded. Initializing camera...';
         await setupCamera();
         faceStatus.innerText = 'Camera ready. Detecting faces...';
