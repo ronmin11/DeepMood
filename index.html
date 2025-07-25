@@ -28,13 +28,22 @@
     <section class="bg-white rounded-lg shadow p-6">
       <h2 class="text-2xl font-bold mb-4 text-gray-800">AI Face Tracking Demo</h2>
       <p class="mb-4 text-gray-600">Allow camera access to see real-time face tracking in action.</p>
-      <div class="relative flex flex-col items-center w-[480px] h-[360px] mx-auto">
-        <video id="video" width="480" height="360" autoplay muted class="rounded border absolute left-0 top-0 z-10 bg-black"></video>
+      <div class="flex flex-col items-center w-[480px] h-[360px] mx-auto relative">
+        <video id="video" width="480" height="360" autoplay muted class="rounded border bg-black z-10"></video>
         <canvas id="overlay" width="480" height="360" class="absolute left-0 top-0 z-20 pointer-events-none"></canvas>
       </div>
       <p id="face-status" class="mt-4 text-blue-600 font-semibold"></p>
       <div class="mt-2">
         <span class="font-semibold">Predicted Emotion:</span> <span id="emotion-result" class="text-pink-600 font-bold">-</span>
+      </div>
+      <!-- Chatbot UI -->
+      <div class="mt-8">
+        <h3 class="text-xl font-bold mb-2 text-gray-700">Therapist Chatbot</h3>
+        <div id="chat-window" class="bg-gray-50 border rounded p-4 h-64 overflow-y-auto mb-2 text-left"></div>
+        <form id="chat-form" class="flex gap-2">
+          <input id="chat-input" type="text" class="flex-1 border rounded px-3 py-2" placeholder="Type your message..." required />
+          <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded">Send</button>
+        </form>
       </div>
     </section>
 
@@ -139,6 +148,50 @@
       } catch (err) {
         emotionResult.textContent = '-';
       }
+    }
+
+    // Chatbot logic
+    const chatForm = document.getElementById('chat-form');
+    const chatInput = document.getElementById('chat-input');
+    const chatWindow = document.getElementById('chat-window');
+
+    chatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const userMsg = chatInput.value.trim();
+      if (!userMsg) return;
+      appendMessage('You', userMsg);
+      chatInput.value = '';
+      chatInput.disabled = true;
+      try {
+        const res = await fetch('/chatbot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: userMsg })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          appendMessage('Therapist', data.reply || '(No response)');
+        } else {
+          appendMessage('Therapist', '(Error: No response)');
+        }
+      } catch (err) {
+        appendMessage('Therapist', '(Network error)');
+      }
+      chatInput.disabled = false;
+      chatInput.focus();
+    });
+
+    function appendMessage(sender, text) {
+      const msgDiv = document.createElement('div');
+      msgDiv.innerHTML = `<span class="font-bold">${sender}:</span> <span>${escapeHtml(text)}</span>`;
+      chatWindow.appendChild(msgDiv);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"]/g, function(c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
+      });
     }
 
     window.addEventListener('DOMContentLoaded', loadModels);
