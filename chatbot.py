@@ -1,9 +1,12 @@
 from together import Together
+import getpass
+import os
 
 predicted_emotion = 'sad' #Put prediction of CNN here
 MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"  
 user_input = "I am feeling very down today."  #user input via frontend typing will go here 
-client = Together(api_key="ba906ff538da415021a2756fa7f816e47b673380adc250f4dc288ec2d4fb18ae")
+os.environ["TOGETHER_API_KEY"] = getpass.getpass("Enter Together API Key: ")
+client = Together()
 
 
 
