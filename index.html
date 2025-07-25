@@ -222,6 +222,18 @@
     const chatForm = document.getElementById('chat-form');
     const chatInput = document.getElementById('chat-input');
     const chatWindow = document.getElementById('chat-window');
+    const chatSendButton = chatForm.querySelector('button[type="submit"]');
+    let lastPredictedEmotion = '-';
+    const chatbotLoading = document.createElement('span');
+    chatbotLoading.className = 'ml-2 text-gray-500';
+    chatbotLoading.textContent = 'Sending...';
+
+    // Update lastPredictedEmotion whenever webcam prediction updates
+    const emotionResult = document.getElementById('emotion-result');
+    const observer = new MutationObserver(() => {
+      lastPredictedEmotion = emotionResult.textContent || '-';
+    });
+    observer.observe(emotionResult, { childList: true });
 
     chatForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -230,17 +242,19 @@
       appendMessage('You', userMsg);
       chatInput.value = '';
       chatInput.disabled = true;
+      chatSendButton.disabled = true;
+      chatForm.appendChild(chatbotLoading);
       try {
-        const res = await fetch('/chatbot', {
+        const res = await fetch('http://localhost:5000/chatbot', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: userMsg })
+          body: JSON.stringify({ message: userMsg, emotion: lastPredictedEmotion })
         });
         if (res.ok) {
           const data = await res.json();
           appendMessage('Therapist', data.reply || '(No response)');
         } else {
-          appendMessage('Therapist', '(Error: No response)');
+          appendMessage('Therapist', '(Error: No response from backend)');
           console.error('Chatbot fetch error:', res.statusText);
         }
       } catch (err) {
@@ -249,6 +263,8 @@
       }
       chatInput.disabled = false;
       chatInput.focus();
+      chatSendButton.disabled = false;
+      if (chatForm.contains(chatbotLoading)) chatForm.removeChild(chatbotLoading);
     });
 
     function appendMessage(sender, text) {
