@@ -1,21 +1,23 @@
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer,pipeline
+from together import Together
 
 predicted_emotion = 'sad' #Put prediction of CNN here
-MODEL = "mistralai/Mistral-7B-Instruct-v0.2"  
+MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"  
 user_input = "I am feeling very down today."  #user input via frontend typing will go here 
+client = Together(api_key="ba906ff538da415021a2756fa7f816e47b673380adc250f4dc288ec2d4fb18ae")
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL)
-model = AutoModelForCausalLM.from_pretrained(MODEL, device_map="auto", torch_dtype=torch.bfloat16)
+
 
 chat = [
     {"role": 'system', 'content': f'You are a helpful therapist, assisting people based on their emotion. The user is {predicted_emotion}.'},
     {"role": 'user', 'content': user_input},
 ]
 
-tokenized_chat = tokenizer.apply_chat_template(chat, tokenize=True, add_generation_prompt=True, return_tensors="pt")
-print(tokenizer.decode(tokenized_chat[0]))
-outputs = model.generate(tokenized_chat, max_new_tokens=128) 
+completion = client.chat.completions.create(
+    model=MODEL,
+    messages=chat,
+    max_tokens=1000,
+    temperature=0.7,
+    top_p=0.9,
+)
 
-print(tokenizer.decode(outputs[0]))
-
+print(completion.choices[0].message.content)
