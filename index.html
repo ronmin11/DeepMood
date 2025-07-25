@@ -173,7 +173,7 @@
           const formData = new FormData();
           formData.append('image', blob, 'frame.jpg');
           try {
-            const response = await fetch('/predict', {
+            const response = await fetch('http://localhost:5000/predict', {
               method: 'POST',
               body: formData
             });
@@ -186,20 +186,17 @@
                 confidenceResult.textContent = '-';
               }
             } else {
-              // Mock demo values if backend returns error
-              emotionResult.textContent = 'happy';
-              confidenceResult.textContent = '95.00%';
+              emotionResult.textContent = '-';
+              confidenceResult.textContent = '-';
             }
           } catch (err) {
-            // Mock demo values if fetch fails
-            emotionResult.textContent = 'happy';
-            confidenceResult.textContent = '95.00%';
+            emotionResult.textContent = '-';
+            confidenceResult.textContent = '-';
           }
         }, 'image/jpeg');
       } catch (err) {
-        // Mock demo values if something else fails
-        emotionResult.textContent = 'happy';
-        confidenceResult.textContent = '95.00%';
+        emotionResult.textContent = '-';
+        confidenceResult.textContent = '-';
       }
     }
 
@@ -280,7 +277,7 @@
       const formData = new FormData();
       formData.append('image', file);
       try {
-        const response = await fetch('/predict', {
+        const response = await fetch('http://localhost:5000/predict', {
           method: 'POST',
           body: formData
         });
@@ -293,14 +290,12 @@
             uploadConfidenceResult.textContent = '-';
           }
         } else {
-          // Mock demo values if backend returns error
-          uploadEmotionResult.textContent = 'happy';
-          uploadConfidenceResult.textContent = '95.00%';
+          uploadEmotionResult.textContent = '-';
+          uploadConfidenceResult.textContent = '-';
         }
       } catch (err) {
-        // Mock demo values if fetch fails
-        uploadEmotionResult.textContent = 'happy';
-        uploadConfidenceResult.textContent = '95.00%';
+        uploadEmotionResult.textContent = '-';
+        uploadConfidenceResult.textContent = '-';
       }
     });
 
