@@ -28,11 +28,14 @@
     <section class="bg-white rounded-lg shadow p-6">
       <h2 class="text-2xl font-bold mb-4 text-gray-800">AI Face Tracking Demo</h2>
       <p class="mb-4 text-gray-600">Allow camera access to see real-time face tracking in action.</p>
-      <div class="flex flex-col items-center">
-        <video id="video" width="480" height="360" autoplay muted class="rounded border"></video>
-        <canvas id="overlay" width="480" height="360" class="absolute left-0 top-0"></canvas>
+      <div class="relative flex flex-col items-center w-[480px] h-[360px] mx-auto">
+        <video id="video" width="480" height="360" autoplay muted class="rounded border absolute left-0 top-0 z-10 bg-black"></video>
+        <canvas id="overlay" width="480" height="360" class="absolute left-0 top-0 z-20 pointer-events-none"></canvas>
       </div>
       <p id="face-status" class="mt-4 text-blue-600 font-semibold"></p>
+      <div class="mt-2">
+        <span class="font-semibold">Predicted Emotion:</span> <span id="emotion-result" class="text-pink-600 font-bold">-</span>
+      </div>
     </section>
 
     <!-- Section 4: Contact -->
@@ -95,6 +98,12 @@
           faceStatus.innerText = detections.length > 0 ? `Faces detected: ${detections.length}` : 'No face detected.';
         }
       }, 200);
+    }
+
+    // Placeholder for sending frames to backend for emotion prediction
+    function sendFrameToBackend(imageData) {
+      // TODO: Implement fetch to /predict endpoint
+      // Example: fetch('/predict', { method: 'POST', body: ... })
     }
 
     window.addEventListener('DOMContentLoaded', loadModels);
