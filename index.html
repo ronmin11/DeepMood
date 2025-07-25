@@ -36,6 +36,8 @@
       <div class="mt-2">
         <span class="font-semibold">Predicted Emotion:</span> <span id="emotion-result" class="text-pink-600 font-bold">-</span>
         <span class="ml-4 font-semibold">Confidence:</span> <span id="confidence-result" class="text-green-600 font-bold">-</span>
+        <span id="webcam-loading" class="ml-4 text-gray-500 hidden">Predicting...</span>
+        <span id="webcam-error" class="ml-4 text-red-600 font-semibold"></span>
       </div>
       <!-- Chatbot UI -->
       <div class="mt-8 block">
@@ -57,6 +59,8 @@
         <div class="mt-2">
           <span class="font-semibold">Predicted Emotion:</span> <span id="upload-emotion-result" class="text-pink-600 font-bold">-</span>
           <span class="ml-4 font-semibold">Confidence:</span> <span id="upload-confidence-result" class="text-green-600 font-bold">-</span>
+          <span id="upload-loading" class="ml-4 text-gray-500 hidden">Predicting...</span>
+          <span id="upload-error" class="ml-4 text-red-600 font-semibold"></span>
         </div>
       </div>
     </section>
@@ -161,6 +165,10 @@
     function sendFrameToBackend() {
       const emotionResult = document.getElementById('emotion-result');
       const confidenceResult = document.getElementById('confidence-result');
+      const webcamLoading = document.getElementById('webcam-loading');
+      const webcamError = document.getElementById('webcam-error');
+      webcamLoading.classList.remove('hidden');
+      webcamError.textContent = '';
       try {
         // Create a temporary canvas to capture the frame
         const tempCanvas = document.createElement('canvas');
@@ -169,7 +177,10 @@
         const ctx = tempCanvas.getContext('2d');
         ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
         tempCanvas.toBlob(async (blob) => {
-          if (!blob) return;
+          if (!blob) {
+            webcamLoading.classList.add('hidden');
+            return;
+          }
           const formData = new FormData();
           formData.append('image', blob, 'frame.jpg');
           try {
@@ -185,18 +196,25 @@
               } else {
                 confidenceResult.textContent = '-';
               }
+              webcamError.textContent = '';
             } else {
               emotionResult.textContent = '-';
               confidenceResult.textContent = '-';
+              webcamError.textContent = 'Prediction failed (backend error).';
             }
+            webcamLoading.classList.add('hidden');
           } catch (err) {
             emotionResult.textContent = '-';
             confidenceResult.textContent = '-';
+            webcamError.textContent = 'Prediction failed (network error).';
+            webcamLoading.classList.add('hidden');
           }
         }, 'image/jpeg');
       } catch (err) {
         emotionResult.textContent = '-';
         confidenceResult.textContent = '-';
+        webcamError.textContent = 'Prediction failed (internal error).';
+        webcamLoading.classList.add('hidden');
       }
     }
 
@@ -252,6 +270,9 @@
     const imgPreview = document.getElementById('img-preview');
     const uploadEmotionResult = document.getElementById('upload-emotion-result');
     const uploadConfidenceResult = document.getElementById('upload-confidence-result');
+    const uploadLoading = document.getElementById('upload-loading');
+    const uploadError = document.getElementById('upload-error');
+    const uploadButton = uploadForm.querySelector('button[type="submit"]');
 
     imgUpload.addEventListener('change', () => {
       const file = imgUpload.files[0];
@@ -274,6 +295,9 @@
       if (!file) return;
       uploadEmotionResult.textContent = '...';
       uploadConfidenceResult.textContent = '...';
+      uploadLoading.classList.remove('hidden');
+      uploadError.textContent = '';
+      uploadButton.disabled = true;
       const formData = new FormData();
       formData.append('image', file);
       try {
@@ -289,13 +313,20 @@
           } else {
             uploadConfidenceResult.textContent = '-';
           }
+          uploadError.textContent = '';
         } else {
           uploadEmotionResult.textContent = '-';
           uploadConfidenceResult.textContent = '-';
+          uploadError.textContent = 'Prediction failed (backend error).';
         }
+        uploadLoading.classList.add('hidden');
+        uploadButton.disabled = false;
       } catch (err) {
         uploadEmotionResult.textContent = '-';
         uploadConfidenceResult.textContent = '-';
+        uploadError.textContent = 'Prediction failed (network error).';
+        uploadLoading.classList.add('hidden');
+        uploadButton.disabled = false;
       }
     });
 
