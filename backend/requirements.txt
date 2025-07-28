@@ -1,0 +1,9 @@
+torch>=2.0.0
+transformers>=4.30.0
+flask>=3.0.0
+flask-cors>=4.0.0
+together>=0.2.11
+pillow>=9.0.0
+numpy>=1.21.0
+opencv-python>=4.8.0
+python-dotenv>=1.0.0
