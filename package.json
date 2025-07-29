@@ -4,7 +4,7 @@
   "description": "DeepMood - Emotion Detection and AI Chatbot",
   "main": "server.js",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build && cd ../backend && pip install -r requirements.txt",
+    "build": "cd frontend && npm install && npm run build",
     "start": "cd backend && python app.py",
     "dev": "concurrently \"cd backend && python app.py\" \"cd frontend && npm run dev\"",
     "install-deps": "cd frontend && npm install && cd ../backend && pip install -r requirements.txt",
