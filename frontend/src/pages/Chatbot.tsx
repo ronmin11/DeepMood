@@ -1,12 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { ChatInterface } from '@/components/ChatInterface';
 import { Brain, MessageCircle } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 
 const Chatbot = () => {
-  const [currentEmotion, setCurrentEmotion] = useState<string>('sad');
+  const [currentEmotion, setCurrentEmotion] = useState<string>('neutral');
+
+  useEffect(() => {
+    // Check if emotion was passed via URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const emotionParam = urlParams.get('emotion');
+    if (emotionParam) {
+      setCurrentEmotion(emotionParam);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -41,6 +48,16 @@ const Chatbot = () => {
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                 Have a conversation with our AI therapist. The chatbot will provide empathetic and supportive responses.
               </p>
+              {currentEmotion && currentEmotion !== 'neutral' && (
+                <div className="mt-4 p-3 bg-primary/10 rounded-lg inline-block">
+                  <p className="text-sm text-muted-foreground">
+                    Detected emotion: <span className="font-semibold text-primary capitalize">{currentEmotion}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    The AI will tailor responses based on your emotional state
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Chat Interface */}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Camera, CameraOff, User } from 'lucide-react';
+import { useRef, useCallback } from 'react';
 
 interface EmotionData {
   emotion: string;
@@ -9,28 +10,129 @@ interface EmotionData {
   color: string;
 }
 
-export const WebcamInterface = () => {
+interface WebcamInterfaceProps {
+  onEmotionDetected?: (emotion: string) => void;
+}
+
+export const WebcamInterface = ({ onEmotionDetected }: WebcamInterfaceProps) => {
   const [isActive, setIsActive] = useState(false);
   const [detectedEmotion, setDetectedEmotion] = useState<EmotionData | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  // Mock emotion detection for demo (you can implement your own logic here)
-  const mockEmotions = [
-    { emotion: 'Happy', confidence: 0.85, color: 'text-accent' },
-    { emotion: 'Calm', confidence: 0.78, color: 'text-secondary' },
-    { emotion: 'Focused', confidence: 0.92, color: 'text-primary' },
-    { emotion: 'Excited', confidence: 0.67, color: 'text-accent-glow' },
-  ];
+  const getEmotionColor = (emotion: string) => {
+    const emotionColors: { [key: string]: string } = {
+      'happy': 'text-green-500',
+      'sad': 'text-blue-500',
+      'angry': 'text-red-500',
+      'surprised': 'text-yellow-500',
+      'neutral': 'text-gray-500',
+      'fearful': 'text-purple-500',
+      'disgusted': 'text-orange-500'
+    };
+    return emotionColors[emotion.toLowerCase()] || 'text-primary';
+  };
+
+  const captureFrame = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+
+    if (!context) return;
+
+    // Set canvas dimensions to match video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Draw current video frame to canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Convert canvas to blob and send to backend
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+
+      const formData = new FormData();
+      formData.append('image', blob, 'frame.jpg');
+
+      try {
+        setIsAnalyzing(true);
+        const response = await fetch('http://localhost:5000/predict', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const emotionData: EmotionData = {
+            emotion: result.emotion,
+            confidence: result.confidence,
+            color: getEmotionColor(result.emotion)
+          };
+          
+          setDetectedEmotion(emotionData);
+          onEmotionDetected?.(result.emotion);
+        }
+      } catch (error) {
+        console.error('Error analyzing emotion:', error);
+      } finally {
+        setIsAnalyzing(false);
+      }
+    }, 'image/jpeg', 0.8);
+  }, [onEmotionDetected]);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: 640, height: 480 } 
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        setIsActive(true);
+        
+        // Start emotion detection every 3 seconds
+        const interval = setInterval(() => {
+          if (isActive) {
+            captureFrame();
+          }
+        }, 3000);
+        
+        // Store interval for cleanup
+        (videoRef.current as any).emotionInterval = interval;
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      alert('Unable to access camera. Please ensure you have granted camera permissions.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      if ((videoRef.current as any).emotionInterval) {
+        clearInterval((videoRef.current as any).emotionInterval);
+      }
+    }
+    
+    setIsActive(false);
+    setDetectedEmotion(null);
+  };
 
   const handleToggleCamera = () => {
-    setIsActive(!isActive);
-    if (!isActive) {
-      // Mock emotion detection after 2 seconds
-      setTimeout(() => {
-        const randomEmotion = mockEmotions[Math.floor(Math.random() * mockEmotions.length)];
-        setDetectedEmotion(randomEmotion);
-      }, 2000);
+    if (isActive) {
+      stopCamera();
     } else {
-      setDetectedEmotion(null);
+      startCamera();
     }
   };
 
@@ -40,12 +142,24 @@ export const WebcamInterface = () => {
       <Card className="relative overflow-hidden bg-gradient-primary border-primary/20 shadow-glow">
         <div className="aspect-video bg-muted/50 flex items-center justify-center relative">
           {isActive ? (
-            <div className="w-full h-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-              <div className="text-center">
-                <User className="w-16 h-16 mx-auto mb-4 text-primary-glow animate-pulse" />
-                <p className="text-sm text-muted-foreground">Camera Active - Analyzing...</p>
-              </div>
-            </div>
+            <>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              <canvas
+                ref={canvasRef}
+                className="hidden"
+              />
+              {isAnalyzing && (
+                <div className="absolute top-4 left-4 bg-card/90 backdrop-blur-sm rounded-lg p-2 border border-border">
+                  <p className="text-xs text-muted-foreground">Analyzing...</p>
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-center">
               <CameraOff className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />

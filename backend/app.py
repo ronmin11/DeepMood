@@ -6,8 +6,9 @@ import io
 from PIL import Image
 import numpy as np
 from together import Together
-import getpass
 from dotenv import load_dotenv
+import cv2
+import tempfile
 
 # Load environment variables
 load_dotenv()
@@ -22,16 +23,34 @@ def get_together_client():
         raise ValueError("TOGETHER_API_KEY not found in environment variables. Please check your .env file.")
     return Together(api_key=api_key)
 
-# Initialize emotion prediction model
+# Initialize emotion prediction model (mock for now)
 def load_emotion_model():
     try:
-        from transformers.pipelines import pipeline
-        # You can replace this with your custom model path
-        model = pipeline("image-classification", model="google/vit-base-patch16-224")
-        return model
+        # For now, we'll use a mock model
+        # In production, you would load your trained emotion detection model here
+        return None
     except Exception as e:
         print(f"Error loading emotion model: {e}")
         return None
+
+# Mock emotion detection function
+def detect_emotion_from_image(image):
+    """
+    Mock emotion detection function.
+    In production, this would use your trained model from model.py
+    """
+    # List of possible emotions
+    emotions = ['happy', 'sad', 'angry', 'surprised', 'neutral', 'fearful', 'disgusted']
+    confidences = [0.85, 0.78, 0.92, 0.67, 0.73, 0.81, 0.69]
+    
+    # For demo purposes, return a random emotion
+    import random
+    emotion_idx = random.randint(0, len(emotions) - 1)
+    
+    return {
+        'emotion': emotions[emotion_idx],
+        'confidence': confidences[emotion_idx]
+    }
 
 emotion_model = load_emotion_model()
 together_client = get_together_client()
@@ -40,35 +59,27 @@ together_client = get_together_client()
 def predict_emotion():
     """Predict emotion from uploaded image"""
     try:
-        if 'image' not in request.files:
+        # Handle both file upload and base64 image data
+        if 'image' in request.files:
+            file = request.files['image']
+            if file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
+            image = Image.open(file.stream)
+        elif request.json and 'image' in request.json:
+            # Handle base64 encoded image
+            image_data = request.json['image']
+            if image_data.startswith('data:image'):
+                image_data = image_data.split(',')[1]
+            
+            image_bytes = base64.b64decode(image_data)
+            image = Image.open(io.BytesIO(image_bytes))
+        else:
             return jsonify({'error': 'No image provided'}), 400
         
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+        # Use mock emotion detection for now
+        result = detect_emotion_from_image(image)
         
-        # Convert image to PIL Image
-        image = Image.open(file.stream)
-        
-        # Predict emotion using the model
-        if emotion_model:
-            predictions = emotion_model(image)
-            # Get the top prediction
-            top_prediction = predictions[0] if predictions else None
-            
-            if top_prediction:
-                return jsonify({
-                    'emotion': top_prediction['label'],
-                    'confidence': top_prediction['score']
-                })
-            else:
-                return jsonify({'error': 'No prediction available'}), 500
-        else:
-            # Fallback to a mock prediction for testing
-            return jsonify({
-                'emotion': 'neutral',
-                'confidence': 0.85
-            })
+        return jsonify(result)
             
     except Exception as e:
         print(f"Error in emotion prediction: {e}")
@@ -85,9 +96,9 @@ def chatbot():
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
         
-        # Create chat context
+        # Create chat context with emotion-aware system prompt
         chat = [
-            {"role": 'system', 'content': f'You are a helpful therapist, assisting people based on their emotion. The user is {predicted_emotion}.'},
+            {"role": 'system', 'content': f'You are a compassionate and empathetic AI therapist. The user is currently feeling {predicted_emotion}. Provide supportive, understanding, and helpful responses that acknowledge their emotional state. Be warm, non-judgmental, and offer practical guidance when appropriate. Keep responses conversational and not overly clinical.'},
             {"role": 'user', 'content': user_message},
         ]
         
@@ -101,25 +112,16 @@ def chatbot():
                 top_p=0.9,
             )
             
-            # Simple approach: convert to string and extract content
-            completion_str = str(completion)
-            print(f"Together AI response: {completion_str}")
-            
-            # For now, use a contextual response based on emotion
-            if predicted_emotion.lower() in ['happy', 'joy', 'excited']:
-                reply = f"I can sense your positive energy! It's wonderful that you're feeling {predicted_emotion}. What's bringing you this joy today? I'd love to hear more about what's making you feel so good."
-            elif predicted_emotion.lower() in ['sad', 'down', 'depressed']:
-                reply = f"I notice you might be feeling {predicted_emotion}. It's completely okay to feel this way, and I'm here to listen without judgment. Would you like to talk about what's on your mind?"
-            elif predicted_emotion.lower() in ['angry', 'frustrated', 'mad']:
-                reply = f"I can see you're feeling {predicted_emotion}. That's a valid emotion, and it's important to acknowledge it. What's been happening that's causing these feelings?"
-            elif predicted_emotion.lower() in ['anxious', 'worried', 'nervous']:
-                reply = f"I sense some {predicted_emotion} energy from you. Anxiety can be really challenging. Would you like to talk about what's causing these feelings of worry?"
+            # Extract the response content
+            if completion.choices and len(completion.choices) > 0:
+                reply = completion.choices[0].message.content
             else:
-                reply = f"I understand you're feeling {predicted_emotion}. That's a valid emotion, and I'm here to listen. Can you tell me more about what's on your mind?"
+                # Fallback response based on emotion
+                reply = get_fallback_response(predicted_emotion, user_message)
             
         except Exception as e:
             print(f"Error calling Together AI: {e}")
-            reply = "I'm sorry, I couldn't generate a response right now. Please try again later."
+            reply = get_fallback_response(predicted_emotion, user_message)
         
         return jsonify({
             'reply': reply,
@@ -129,6 +131,23 @@ def chatbot():
     except Exception as e:
         print(f"Error in chatbot: {e}")
         return jsonify({'error': 'Chatbot failed'}), 500
+
+def get_fallback_response(emotion, message):
+    """Generate fallback responses based on emotion when AI service is unavailable"""
+    emotion = emotion.lower()
+    
+    if emotion in ['happy', 'joy', 'excited']:
+        return f"I can sense your positive energy! It's wonderful that you're feeling {emotion}. What's bringing you this joy today? I'd love to hear more about what's making you feel so good."
+    elif emotion in ['sad', 'down', 'depressed']:
+        return f"I notice you might be feeling {emotion}. It's completely okay to feel this way, and I'm here to listen without judgment. Would you like to talk about what's on your mind?"
+    elif emotion in ['angry', 'frustrated', 'mad']:
+        return f"I can see you're feeling {emotion}. That's a valid emotion, and it's important to acknowledge it. What's been happening that's causing these feelings?"
+    elif emotion in ['anxious', 'worried', 'nervous', 'fearful']:
+        return f"I sense some {emotion} energy from you. These feelings can be really challenging. Would you like to talk about what's causing these feelings?"
+    elif emotion in ['surprised']:
+        return f"You seem {emotion}! Sometimes unexpected things can catch us off guard. How are you processing what's happening?"
+    else:
+        return f"I understand you're feeling {emotion}. That's a valid emotion, and I'm here to listen. Can you tell me more about what's on your mind?"
 
 @app.route('/health', methods=['GET'])
 def health_check():

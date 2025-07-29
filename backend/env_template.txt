@@ -1,0 +1,10 @@
+# Together AI API Key
+# Get your API key from: https://api.together.xyz/settings/api-keys
+TOGETHER_API_KEY=your_api_key_here
+
+# Flask Configuration
+FLASK_ENV=development
+FLASK_DEBUG=True
+
+# CORS Configuration
+CORS_ORIGINS=http://localhost:5173,http://localhost:8080

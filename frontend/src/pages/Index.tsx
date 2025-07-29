@@ -3,10 +3,13 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { WebcamInterface } from '@/components/WebcamInterface';
 import { Brain, Sparkles, MessageCircle, Camera } from 'lucide-react';
-import heroImage from '@/assets/hero-bg.jpg';
 
 const Index = () => {
   const [currentEmotion, setCurrentEmotion] = useState<string>();
+
+  const handleEmotionDetected = (emotion: string) => {
+    setCurrentEmotion(emotion);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -73,6 +76,14 @@ const Index = () => {
               </Button>
             </div>
             
+            {/* Current Emotion Display */}
+            {currentEmotion && (
+              <div className="mt-8 p-4 bg-card/50 backdrop-blur-sm rounded-lg border border-border inline-block">
+                <p className="text-sm text-muted-foreground mb-1">Current Detected Emotion:</p>
+                <p className="text-lg font-semibold text-primary capitalize">{currentEmotion}</p>
+              </div>
+            )}
+            
             {/* Floating Elements */}
             <div className="absolute top-20 left-10 w-2 h-2 bg-primary/30 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
             <div className="absolute top-32 right-16 w-1 h-1 bg-accent/40 rounded-full animate-bounce" style={{animationDelay: '1s'}}></div>
@@ -128,7 +139,7 @@ const Index = () => {
       </section>
 
       {/* Main Interface */}
-      <section className="py-20">
+      <section id="demo" className="py-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
@@ -151,8 +162,24 @@ const Index = () => {
               <p className="text-muted-foreground mb-6">
                 Enable your camera to analyze facial expressions and detect emotional states in real-time.
               </p>
-              <WebcamInterface />
+              <WebcamInterface onEmotionDetected={handleEmotionDetected} />
             </Card>
+            
+            {/* Quick Chat Access */}
+            {currentEmotion && (
+              <div className="mt-8 text-center">
+                <p className="text-muted-foreground mb-4">
+                  Ready to chat with our AI therapist about your {currentEmotion} mood?
+                </p>
+                <Button 
+                  onClick={() => window.location.href = `/chatbot?emotion=${currentEmotion}`}
+                  className="group"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Start Conversation
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </section>
