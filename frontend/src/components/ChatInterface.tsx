@@ -41,7 +41,7 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
   // API call to backend chatbot
   const sendMessageToBackend = async (userMessage: string, emotion?: string) => {
     try {
-      const response = await fetch('http://localhost:5000/chatbot', {
+      const response = await fetch('https://deepmood.onrender.com/chatbot', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
