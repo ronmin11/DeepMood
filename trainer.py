@@ -2,28 +2,44 @@
 import os, torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model import EmotionNet #COMMENT IF USING COLAB
+from model import EmotionNet # UNCOMMENT IN VSCODE
 from tqdm import tqdm
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from IPython.display import display, clear_output
 from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score
+import transformers
+from transformers import ViTForImageClassification
 
 import timm
-from model import MoodCNN2  # <- this is your custom model, no timm. COMMENT IF USING COLAB
+from model import MoodCNN2  # <- this is the custom model, no timm
 
+# from timm.data import Mixup
 
 class Trainer:
     def __init__(self, args, train_loader=None, epoch=1):
         self.args = args
-        self.epoch = args.epochs
+        # self.epoch = args.epochs
+        self.epoch = epoch
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if args.model_name == 'custom':
             self.model = MoodCNN2(num_classes=args.num_classes).to(self.device)
         elif args.model_name == 'resnet50.a1_in1k':
+            backbone = timm.create_model(args.model_name, pretrained=True, num_classes=0)
+            self.model = EmotionNet(backbone, args.num_classes).to(self.device)
+        elif args.model_name.startswith("google/vit"):
+            from transformers import ViTForImageClassification
+            self.model = ViTForImageClassification.from_pretrained(
+                args.model_name,
+                num_labels=args.num_classes,
+                ignore_mismatched_sizes=True
+            ).to(self.device)
+        elif args.model_name in timm.list_models():
             backbone = timm.create_model(args.model_name, pretrained=True, num_classes=0)
             self.model = EmotionNet(backbone, args.num_classes).to(self.device)
         else:
@@ -35,11 +51,18 @@ class Trainer:
 
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=1, gamma=args.lr_decay)
+        # self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.epochs)
+        # self.scheduler = torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, steps_per_epoch=len(train_loader), epochs=epochs)
         self.criterion = nn.CrossEntropyLoss()
+        # self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+
 
         # Logging DataFrame
         self.logs_df = pd.DataFrame(columns=["Epoch", "Train Loss", "Train Accuracy", "Val Loss", "Val Accuracy", "F1 Score"])
-
+        # self.mixup_fn = Mixup(
+        #     mixup_alpha=0.8, cutmix_alpha=1.0,
+        #     label_smoothing=0.1, num_classes=args.num_classes
+        # )
 
     def train_network(self, epoch, loader, **kwargs):
         self.model.train()
@@ -49,8 +72,15 @@ class Trainer:
         for imgs, labels in loop:
             imgs, labels = imgs.to(self.device), labels.to(self.device)
 
+            # using Mixup for improve data augmentation (PRODUCED AN ERROR)
+            # if self.mixup_fn is not None:
+            #     imgs, labels = self.mixup_fn(imgs, labels)
+
             outputs = self.model(imgs)
             loss = self.criterion(outputs, labels)
+
+            # print("Softmax output:", torch.softmax(outputs, dim=1)[0].detach().cpu().numpy())
+
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -66,6 +96,11 @@ class Trainer:
         avg_loss = total_loss / len(loader)
         accuracy = (correct / total) * 100.0
         return avg_loss, accuracy, self.optimizer.param_groups[0]['lr']
+
+    def get_classes(self, dataset):
+        while hasattr(dataset, 'dataset'):
+            dataset = dataset.dataset
+        return getattr(dataset, 'classes', None)
 
     def evaluate_network(self, epoch=0, loader=None, **kwargs):
         self.model.eval()
@@ -93,22 +128,34 @@ class Trainer:
                 loop.set_postfix(accuracy=f"{(correct/total)*100:.2f}%")
 
         avg_loss = total_loss / len(loader)
-        accuracy = (correct / total) * 100.0
+        # accuracy = (correct / total) * 100.0
+        class_weights = {
+            0: 1.0,   # neutral
+            1: 1.0,   # sad
+            2: 0.5,   # happy (overrepresented)
+            3: 1.2,   # angry
+            4: 1.1,   # fearful
+            5: 1.3,   # surprised
+            6: 2.0,   # disgusted (rare)
+        }
+        sample_weights = np.array([class_weights[label] for label in all_labels])
+        weighted_acc = accuracy_score(all_labels, all_preds, sample_weight=sample_weights) * 100.0
         f1 = f1_score(all_labels, all_preds, average='weighted') * 100.0
 
         # Add confusion matrix
         from sklearn.metrics import confusion_matrix
         cm = confusion_matrix(all_labels, all_preds)
         plt.figure(figsize=(10, 8))
+        classes = self.get_classes(loader.dataset)
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-                    xticklabels=loader.dataset.classes,
-                    yticklabels=loader.dataset.classes)
+                    xticklabels=classes,
+                    yticklabels=classes)
         plt.xlabel('Predicted')
         plt.ylabel('True')
         plt.title('Confusion Matrix')
         plt.show()
 
-        return avg_loss, accuracy, f1
+        return avg_loss, weighted_acc, f1
 
     def log_metrics(self, epoch, train_loss, train_acc, val_loss, val_acc, f1):
         new_row = {

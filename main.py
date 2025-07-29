@@ -2,6 +2,7 @@
 import argparse, os, glob, time, sys
 from trainer import Trainer #COMMENT IF USING COLAB
 from image_loader import get_image_dataloaders #COMMENT IF USING COLAB
+from model import get_model_info #COMMENT IF USING COLAB
 import numpy as np
 
 import pandas as pd
@@ -9,11 +10,31 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 from IPython.display import display, clear_output
 
+#FOR COLAB
+# Define global persistent path to save best.model
+# GLOBAL_MODEL_PATH = "/content/drive/MyDrive/emotion_model/best.model"
+# GLOBAL_SCORE_PATH = "/content/drive/MyDrive/emotion_model/score.txt"
+# GLOBAL_DATASET_PATH = "/content/EmotionDataset"
+
+#FOR VSCODE
+GLOBAL_MODEL_PATH = "best.model"
+GLOBAL_SCORE_PATH = "score.txt"
+GLOBAL_DATASET_PATH = "EmotionDataset"
+
+def get_best_model_path():
+    return GLOBAL_MODEL_PATH
+
+def get_best_score_path():
+    return GLOBAL_SCORE_PATH
+
+def get_dataset_path():
+    return GLOBAL_DATASET_PATH
+
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--model_name', type=str, default='resnet50.a1_in1k', help="Backbone model name from timm")
-    parser.add_argument('--num_classes', type=int, default=7, help="Number of emotion classes")
+    parser.add_argument('--model_name', type=str, default=get_model_info()[0] or 'resnet50.a1_in1k', help="Backbone model name from timm")
+    parser.add_argument('--num_classes', type=int, default=get_model_info()[1] or 7, help="Number of emotion classes")
     parser.add_argument("--loadNumImages", type=int, default=-1, help="Max images to load per class. Use -1 to load all.")
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--num_workers', type=int, default=2) #4 is too much for google colab to handle
@@ -21,7 +42,7 @@ def get_args():
     parser.add_argument('--lr_decay', type=float, default=0.95)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
     parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--dataset_path', type=str, default='/content/EmotionDataset')
+    parser.add_argument('--dataset_path', type=str, default='EmotionDataset')
     parser.add_argument('--savePath', type=str, default='checkpoints')
     parser.add_argument('--testInterval', type=int, default=1)
     parser.add_argument('--evaluation', action='store_true')

@@ -33,5 +33,7 @@ seaborn
 
 #camera
 # opencv-python 
-opencv-python-headless
+# opencv-python-headless
 facenet-pytorch
+
+transformers

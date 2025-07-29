@@ -17,21 +17,70 @@ from tqdm import tqdm
 import time
 
 #Using pretrained resnet50.a1_in1k model as a feature extractor, without classifier head
-backbone_model = timm.create_model(
-    'resnet50.a1_in1k',
-    pretrained=True,
-    num_classes = 7,
-)
+# backbone_model = timm.create_model(
+#     'resnet50.a1_in1k',
+#     pretrained=True,
+#     num_classes = 0,
+# )
 
 # effNet = timm.create_model(
 #     "efficientnetv2_m.in21k_ft_in1k",
 #     pretrained=True,
-#     num_classes = 7
+#     num_classes = 0
 # )
+
+#Vision Transformer for > 5k images
+# backbone_model = timm.create_model(
+#     'google/vit_base_patch16_224',
+#     pretrained=True,
+#     num_classes = 0,
+# )
+
+#ViT pretrained on 14 million images
+# backbone_model = timm.create_model(
+#     'vit_base_patch16_224_in21k',
+#     pretrained=True,
+#     num_classes = 0,
+# )
+
+# backbone_model = timm.create_model(
+#     'vit_base_patch16_224.augreg_in21k',
+#     pretrained=True,
+#     num_classes = 0,
+# )
+
+#============================================
+
+models = [
+    'resnet50.a1_in1k', # Used multiple times, got max 67% accuracy
+    'efficientnetv2_m.in21k_ft_in1k', #Never tested
+    'vit_base_patch16_224_in21k', # Deprecated
+    'google/vit_base_patch16_224', #used once, got 72.14% accuracy
+    'vit_base_patch16_224.augreg_in21k' #Testing now
+]
+model_name = models[4]
+num_classes = 7
+
+def get_model_info():
+    return model_name, num_classes
+
+backbone_model = timm.create_model(
+    model_name,
+    pretrained=True,
+    num_classes = 0,
+)
+
+
+
+#STEPS
+# 1) List initial distributions of each emotion from the original data  DONE
+# 2) Use sklearn for f1 score and weighted accuracy  DONE
+# 3) Find the predictions for each label and see which one is the worst and best. Consider removing the one label that performs the worst. ???
+
 
 
 class MoodCNN1(nn.Module):
-    def __init__(self, num_classes=7):
+    def __init__(self, num_classes=num_classes):
         super(MoodCNN1, self).__init__()
         self.features = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=3, padding=1),
@@ -73,7 +122,7 @@ class MoodCNN1(nn.Module):
 
 # Increase capacity and add residual connections
 class MoodCNN2(nn.Module):
-    def __init__(self, num_classes=7):
+    def __init__(self, num_classes=num_classes):
         super(MoodCNN2, self).__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(3, 64, 3, padding=1),
@@ -132,13 +181,21 @@ class EmotionNet(nn.Module):
         super(EmotionNet, self).__init__()
         self.backbone = backbone
         self.classifier = nn.Linear(backbone.num_features, num_classes)
-        # self.classifier = nn.Sequential(
-        #     nn.Dropout(0.5),
-        #     nn.Linear(backbone.num_features, 512),
-        #     nn.ReLU(inplace=True),
-        #     nn.Dropout(0.5),
-        #     nn.Linear(512, num_classes)
-        # )
+        self.classifier = nn.Sequential(
+            # nn.Dropout(0.3),
+            # nn.Linear(backbone.num_features, 512),
+            # nn.ReLU(inplace=True),
+            # nn.Dropout(0.3),
+            # nn.Linear(512, num_classes)
+
+            nn.BatchNorm1d(backbone.num_features),
+            nn.Dropout(0.5),
+            nn.Linear(backbone.num_features, 512),
+            nn.SiLU(inplace=True),  # Better activation
+            nn.BatchNorm1d(512),
+            nn.Dropout(0.3),
+            nn.Linear(512, num_classes)
+        )
 
     def forward(self, x):
         x = self.backbone(x)
