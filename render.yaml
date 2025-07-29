@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: deepmood-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && python app.py
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: TOGETHER_API_KEY
+        sync: false  # This will be set manually in Render dashboard 

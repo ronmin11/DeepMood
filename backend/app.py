@@ -10,12 +10,26 @@ from dotenv import load_dotenv
 import cv2
 import tempfile
 import traceback
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=['http://localhost:5173', 'http://localhost:8080', 'http://localhost:3000', 'https://deepmood.onrender.com'])
+
+# Configure CORS based on environment
+if os.getenv('FLASK_ENV') == 'production':
+    # In production, only allow specific origins
+    CORS(app, origins=[
+        'https://deepmood.onrender.com',
+        'https://deepmood-frontend.onrender.com', 
+        'https://deepmood-utd-final-project.onrender.com',
+        'https://deepmood-utd-final-project-frontend.onrender.com',
+        'https://deepmood-utd-final-project.onrender.com'  # Frontend URL
+    ])
+else:
+    # In development, allow all origins
+    CORS(app, origins=['*'])
 
 # Initialize Together AI client
 def get_together_client():
@@ -106,6 +120,15 @@ def chatbot():
     """Handle chatbot conversations"""
     try:
         print("Received chatbot request")
+        print(f"Request headers: {dict(request.headers)}")
+        print(f"Request method: {request.method}")
+        print(f"Request URL: {request.url}")
+        
+        # Check if request has JSON content
+        if not request.is_json:
+            print("ERROR: Request is not JSON")
+            return jsonify({'error': 'Request must be JSON'}), 400
+            
         data = request.get_json()
         print(f"Request data: {data}")
         
@@ -196,6 +219,28 @@ def health_check():
         print(f"Error in health check: {e}")
         return jsonify({'error': 'Health check failed'}), 500
 
+@app.route('/test', methods=['GET'])
+def test_endpoint():
+    """Simple test endpoint to verify the API is working"""
+    return jsonify({
+        'message': 'Backend is working!',
+        'timestamp': str(datetime.now())
+    })
+
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint"""
+    return jsonify({
+        'message': 'DeepMood API',
+        'endpoints': {
+            'health': '/health',
+            'test': '/test',
+            'chatbot': '/chatbot',
+            'predict': '/predict'
+        },
+        'status': 'running'
+    })
+
 # Add error handlers
 @app.errorhandler(404)
 def not_found(error):
@@ -214,4 +259,7 @@ def log_request_info():
 if __name__ == '__main__':
     print("Starting DeepMood Flask application...")
     print(f"Together AI client status: {'Available' if together_client else 'Not available'}")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    
+    # Get port from environment variable (for Render) or use default
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)

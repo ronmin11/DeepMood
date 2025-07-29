@@ -38,14 +38,50 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
     scrollToBottom();
   }, [messages]);
 
+  // Test backend connection
+  const testBackendConnection = async () => {
+    try {
+      const apiUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://deepmood-backend.onrender.com/health'
+        : 'http://localhost:5000/health';
+      
+      console.log('Testing backend connection to:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+      });
+
+      console.log('Health check response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Health check response:', data);
+        return true;
+      } else {
+        const errorText = await response.text();
+        console.error('Health check failed:', errorText);
+        return false;
+      }
+    } catch (error) {
+      console.error('Health check error:', error);
+      return false;
+    }
+  };
+
+  // Test connection on component mount
+  useEffect(() => {
+    testBackendConnection();
+  }, []);
+
   // API call to backend chatbot
   const sendMessageToBackend = async (userMessage: string, emotion?: string) => {
     try {
       // Use localhost for development, deployed URL for production
       const apiUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://deepmood.onrender.com/chatbot'
+        ? 'https://deepmood-backend.onrender.com/chatbot'
         : 'http://localhost:5000/chatbot';
       
+      console.log('Environment:', process.env.NODE_ENV);
       console.log('Sending request to:', apiUrl);
       console.log('Request data:', { message: userMessage, emotion: emotion || 'neutral' });
       
@@ -61,7 +97,8 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
       });
 
       console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
+      console.log('Response status text:', response.statusText);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         const errorText = await response.text();
