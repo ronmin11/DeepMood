@@ -1,98 +1,130 @@
-import cv2
+import base64
+import io
+import time
+import os
 import torch
-import timm
 import numpy as np
+import cv2
 from PIL import Image
 from torchvision import transforms
 from facenet_pytorch import MTCNN
+import timm
+from model import EmotionNet, MoodCNN2
+from test_single_image_url import get_prediction_args
 
-# Your model classes
-from model import EmotionNet  # or your actual model file
-# from model import MoodCNN2
+display_id = None
 
 class EmotionDetector:
-    def __init__(self, model_path='checkpoints/best.model', model_type='resnet50.a1_in1k', num_classes=7):
+    def __init__(self, model_type=get_prediction_args()['model_type'], checkpoint_path = get_prediction_args()['checkpoint_path'], num_classes=7, verbose=False):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model_type = model_type
         self.class_names = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
+        self.verbose = verbose
 
-        # Load YOLOv11 (or MTCNN fallback)
-        self.face_detector = MTCNN(keep_all=False, device=self.device)
-
-        # Load emotion model
-        self.model = self._load_model(model_path, model_type, num_classes)
+        self.mtcnn = MTCNN(keep_all=True, min_face_size=40, device=self.device)
+        self.model = self._load_model(model_type, checkpoint_path, num_classes)
         self.transform = self._get_transform(model_type)
 
-    def _load_model(self, checkpoint_path, model_type, num_classes):
-        if model_type == 'resnet50.a1_in1k':
-            backbone = timm.create_model(model_type, pretrained=False, num_classes=0)
+        self.predictions_store = []
+        self.confidence_avg = []
+
+    def add(self, label, loc, val):
+        if label not in loc:
+            loc[label] = val
+        else:
+            loc[label] += val
+    
+    def get_frequent_prediction(self):
+        highest = -100000
+        index = -1
+        for n, i in enumerate(self.predictions_store):
+          if n > highest:
+            highest = n
+            index = i
+        return {'prediction': self.predictions_store[index], 'confidence': self.confidence_avg[index] / self.predictions_store[index]} or None
+
+    def _load_model(self, model_type, checkpoint_path, num_classes):
+        if model_type.startswith('resnet') or model_type.startswith("google/vit"):
+            backbone = timm.create_model(model_type, pretrained=True, num_classes=0)
             model = EmotionNet(backbone, num_classes)
         else:
-            raise ValueError("Unsupported model type")
+            model = MoodCNN2(num_classes=num_classes)
 
         model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
-        model.to(self.device).eval()
+        model.to(self.device)
+        model.eval()
         return model
 
     def _get_transform(self, model_type):
         model_timm = timm.create_model(model_type, pretrained=True, num_classes=0)
-        data_config = timm.data.resolve_model_data_config(model_timm)
+        config = timm.data.resolve_model_data_config(model_timm)
         return transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
-            transforms.Normalize(data_config['mean'], data_config['std']),
+            # transforms.Normalize(config['mean'], config['std']),
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         ])
 
-    def predict_emotion(self, face_image):
-        tensor = self.transform(face_image).unsqueeze(0).to(self.device)
+    def predict_emotion(self, pil_img: Image.Image):
+        # image = pil_img.convert('RGB')
+        image = pil_img.convert('L')
+        image = image.convert('RGB')  # Fake 3-channel so transform won't break
+        
+        # Detect faces with MTCNN
+        boxes, _ = self.mtcnn.detect(image)
+
+        if boxes is None or len(boxes) == 0:
+            return "No face detected", None, None
+
+        # Process first detected face
+        x1, y1, x2, y2 = map(int, boxes[0])
+        w, h = x2 - x1, y2 - y1
+
+        # Expand bounding box by 20%
+        x1 = max(0, int(x1 - 0.2 * w))
+        y1 = max(0, int(y1 - 0.2 * h))
+        x2 = min(image.width, int(x2 + 0.2 * w))
+        y2 = min(image.height, int(y2 + 0.2 * h))
+
+        face_crop = image.crop((x1, y1, x2, y2))
+        face_tensor = self.transform(face_crop).unsqueeze(0).to(self.device)
+
+        # Make and store predictions
         with torch.no_grad():
-            out = self.model(tensor)
-            prob = torch.softmax(out, dim=1)
-            confidence, pred = torch.max(prob, 1)
-            return self.class_names[pred.item()], confidence.item()
+            output = self.model(face_tensor)
+            probs = torch.softmax(output, dim=1)
+            confidence, predicted = torch.max(probs, 1)
+            self.add(self.class_names[predicted.item()], self.predictions_store, 1)
+            self.add(self.class_names[predicted.item()], self.confidence_avg, confidence.item())
+            return self.class_names[predicted.item()], confidence.item(), (x1, y1, x2, y2)
 
+    def run_webcam(self):
+        cap = cv2.VideoCapture(0)
+        print("Starting webcam...")
 
-def main():
-    detector = EmotionDetector()
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Webcam not found")
-        return
+            # Convert to PIL
+            img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_image = Image.fromarray(img_rgb)
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+            emotion, conf, box = self.predict_emotion(pil_image)
 
-        # Convert BGR to RGB for MTCNN
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pil_image = Image.fromarray(rgb_frame)
-
-        boxes, _ = detector.face_detector.detect(pil_image)
-
-        if boxes is not None:
-            for box in boxes:
-                x1, y1, x2, y2 = map(int, box)
-                face = pil_image.crop((x1, y1, x2, y2))
-
-                emotion, conf = detector.predict_emotion(face)
-                label = f"{emotion} ({conf:.2f})"
-
-                # Draw bounding box & label
+            if box is not None:
+                x1, y1, x2, y2 = box
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.8, (0, 255, 0), 2)
+                cv2.putText(frame, f"{emotion} ({conf:.2f})", (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            else:
+                cv2.putText(frame, "No face detected", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
-        cv2.imshow("Emotion Detection", frame)
+            cv2.imshow('Emotion Detector', frame)
 
-        # Press Q to quit
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
-    cap.release()
-    cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()
+        cap.release()
+        cv2.destroyAllWindows()
