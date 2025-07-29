@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, Loader2 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -10,6 +10,7 @@ interface Message {
   content: string;
   timestamp: Date;
   emotion?: string;
+  isLoading?: boolean;
 }
 
 interface ChatInterfaceProps {
@@ -26,6 +27,7 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
     }
   ]);
   const [inputValue, setInputValue] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -65,6 +67,7 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
+    setIsTyping(true);
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
@@ -80,8 +83,9 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
     const loadingMessage: Message = {
       id: (Date.now() + 1).toString(),
       type: 'bot',
-      content: '...',
+      content: 'Thinking...',
       timestamp: new Date(),
+      isLoading: true,
     };
     setMessages(prev => [...prev, loadingMessage]);
 
@@ -92,16 +96,18 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
       // Replace loading message with actual response
       setMessages(prev => prev.map(msg => 
         msg.id === loadingMessage.id 
-          ? { ...msg, content: botResponse, emotion: detectedEmotion }
+          ? { ...msg, content: botResponse, emotion: detectedEmotion, isLoading: false }
           : msg
       ));
     } catch (error) {
       // Replace loading message with error
       setMessages(prev => prev.map(msg => 
         msg.id === loadingMessage.id 
-          ? { ...msg, content: "I'm sorry, I'm having trouble connecting right now. Please try again later." }
+          ? { ...msg, content: "I'm sorry, I'm having trouble connecting right now. Please try again later.", isLoading: false }
           : msg
       ));
+    } finally {
+      setIsTyping(false);
     }
   };
 
@@ -155,7 +161,12 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-muted-foreground'
               }`}>
-                <p className="text-sm">{message.content}</p>
+                <div className="flex items-center gap-2">
+                  {message.isLoading && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+                  <p className="text-sm">{message.content}</p>
+                </div>
                 <p className={`text-xs mt-1 opacity-70`}>
                   {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
@@ -179,9 +190,13 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
           onClick={handleSendMessage}
           variant="accent"
           size="icon"
-          disabled={!inputValue.trim()}
+          disabled={!inputValue.trim() || isTyping}
         >
-          <Send className="w-4 h-4" />
+          {isTyping ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
         </Button>
       </div>
     </div>

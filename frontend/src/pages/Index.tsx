@@ -6,11 +6,20 @@ import { Brain, Sparkles, MessageCircle, Camera } from 'lucide-react';
 
 const Index = () => {
   const [currentEmotion, setCurrentEmotion] = useState<string>();
+  const [isDemoActive, setIsDemoActive] = useState(false);
 
   const handleEmotionDetected = (emotion: string) => {
     setCurrentEmotion(emotion);
   };
 
+  const handleStartDemo = () => {
+    setIsDemoActive(true);
+    // Scroll to the demo section
+    const demoSection = document.getElementById('demo');
+    if (demoSection) {
+      demoSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -65,7 +74,11 @@ const Index = () => {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="text-base group relative overflow-hidden">
+              <Button 
+                size="lg" 
+                className="text-base group relative overflow-hidden"
+                onClick={handleStartDemo}
+              >
                 <div className="absolute inset-0 bg-gradient-to-r from-primary to-accent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <Camera className="w-5 h-5 relative z-10" />
                 <span className="relative z-10">Start Demo</span>
@@ -158,28 +171,52 @@ const Index = () => {
                 <h3 className="text-xl font-semibold text-card-foreground">
                   Emotion Detection
                 </h3>
+                {isDemoActive && (
+                  <div className="ml-auto">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      Demo Active
+                    </span>
+                  </div>
+                )}
               </div>
               <p className="text-muted-foreground mb-6">
                 Enable your camera to analyze facial expressions and detect emotional states in real-time.
               </p>
               <WebcamInterface onEmotionDetected={handleEmotionDetected} />
-            </Card>
-            
-            {/* Quick Chat Access */}
-            {currentEmotion && (
-              <div className="mt-8 text-center">
-                <p className="text-muted-foreground mb-4">
-                  Ready to chat with our AI therapist about your {currentEmotion} mood?
-                </p>
-                <Button 
-                  onClick={() => window.location.href = `/chatbot?emotion=${currentEmotion}`}
-                  className="group"
-                >
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Start Conversation
-                </Button>
+              
+              {/* Chatbot Button at bottom of camera section */}
+              <div className="mt-8 pt-6 border-t border-border">
+                <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                  <div className="text-center sm:text-left">
+                    <h4 className="font-semibold text-card-foreground mb-1">
+                      Ready to talk?
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      Chat with our AI therapist for personalized support
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button 
+                      variant="outline"
+                      onClick={() => window.location.href = '/chatbot'}
+                      className="group"
+                    >
+                      <MessageCircle className="w-4 h-4 mr-2 group-hover:animate-pulse" />
+                      Start Chatting
+                    </Button>
+                    {currentEmotion && (
+                      <Button 
+                        onClick={() => window.location.href = `/chatbot?emotion=${currentEmotion}`}
+                        className="group"
+                      >
+                        <MessageCircle className="w-4 h-4 mr-2" />
+                        Chat with {currentEmotion} context
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
+            </Card>
           </div>
         </div>
       </section>
