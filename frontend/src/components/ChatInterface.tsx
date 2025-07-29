@@ -42,8 +42,8 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
   const testBackendConnection = async () => {
     try {
       const apiUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://deepmood-backend.onrender.com/health'
-        : 'http://localhost:5000/health';
+        ? '/api/health'
+        : '/api/health';
       
       console.log('Testing backend connection to:', apiUrl);
       
@@ -78,8 +78,8 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
     try {
       // Use localhost for development, deployed URL for production
       const apiUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://deepmood-backend.onrender.com/chatbot'
-        : 'http://localhost:5000/chatbot';
+        ? '/api/chatbot'
+        : '/api/chatbot';
       
       console.log('Environment:', process.env.NODE_ENV);
       console.log('Sending request to:', apiUrl);

@@ -1,9 +1,12 @@
 services:
   - type: web
-    name: deepmood-backend
+    name: deepmood-fullstack
     env: python
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
+    buildCommand: |
+      npm install
+      npm run build
+      pip install -r backend/requirements.txt
     startCommand: cd backend && python app.py
     envVars:
       - key: FLASK_ENV

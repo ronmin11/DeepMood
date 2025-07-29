@@ -1,6 +1,23 @@
 {
+  "name": "deepmood-fullstack",
+  "version": "1.0.0",
+  "description": "DeepMood - Emotion Detection and AI Chatbot",
+  "main": "server.js",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "start": "cd backend && python app.py",
+    "dev": "concurrently \"cd backend && python app.py\" \"cd frontend && npm run dev\"",
+    "install-deps": "cd frontend && npm install && cd ../backend && pip install -r requirements.txt",
+    "postbuild": "echo 'Frontend built successfully. Backend will serve the static files.'"
+  },
   "dependencies": {
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

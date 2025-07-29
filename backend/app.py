@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import base64
@@ -15,7 +15,7 @@ from datetime import datetime
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../frontend/dist', static_url_path='')
 
 # Configure CORS based on environment
 if os.getenv('FLASK_ENV') == 'production':
@@ -82,7 +82,7 @@ except Exception as e:
     print(f"ERROR: Failed to initialize Together AI client: {e}")
     together_client = None
 
-@app.route('/predict', methods=['POST'])
+@app.route('/api/predict', methods=['POST'])
 def predict_emotion():
     """Predict emotion from uploaded image"""
     try:
@@ -115,7 +115,7 @@ def predict_emotion():
         traceback.print_exc()
         return jsonify({'error': 'Prediction failed'}), 500
 
-@app.route('/chatbot', methods=['POST'])
+@app.route('/api/chatbot', methods=['POST'])
 def chatbot():
     """Handle chatbot conversations"""
     try:
@@ -206,7 +206,7 @@ def get_fallback_response(emotion, message):
     else:
         return f"I understand you're feeling {emotion}. That's a valid emotion, and I'm here to listen. Can you tell me more about what's on your mind?"
 
-@app.route('/health', methods=['GET'])
+@app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
     try:
@@ -219,7 +219,7 @@ def health_check():
         print(f"Error in health check: {e}")
         return jsonify({'error': 'Health check failed'}), 500
 
-@app.route('/test', methods=['GET'])
+@app.route('/api/test', methods=['GET'])
 def test_endpoint():
     """Simple test endpoint to verify the API is working"""
     return jsonify({
@@ -228,15 +228,20 @@ def test_endpoint():
     })
 
 @app.route('/', methods=['GET'])
-def root():
-    """Root endpoint"""
+def serve_frontend():
+    """Serve the React frontend"""
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/api', methods=['GET'])
+def api_info():
+    """API info endpoint"""
     return jsonify({
         'message': 'DeepMood API',
         'endpoints': {
-            'health': '/health',
-            'test': '/test',
-            'chatbot': '/chatbot',
-            'predict': '/predict'
+            'health': '/api/health',
+            'test': '/api/test',
+            'chatbot': '/api/chatbot',
+            'predict': '/api/predict'
         },
         'status': 'running'
     })

@@ -62,8 +62,8 @@ export const WebcamInterface = ({ onEmotionDetected }: WebcamInterfaceProps) => 
         setIsAnalyzing(true);
         // Use localhost for development, deployed URL for production
         const apiUrl = process.env.NODE_ENV === 'production'
-          ? 'https://deepmood-backend.onrender.com/predict'
-          : 'http://localhost:5000/predict';
+          ? '/api/predict'
+          : '/api/predict';
           
         const response = await fetch(apiUrl, {
           method: 'POST',
