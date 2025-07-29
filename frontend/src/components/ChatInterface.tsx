@@ -41,7 +41,15 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
   // API call to backend chatbot
   const sendMessageToBackend = async (userMessage: string, emotion?: string) => {
     try {
-      const response = await fetch('https://deepmood.onrender.com/chatbot', {
+      // Use localhost for development, deployed URL for production
+      const apiUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://deepmood.onrender.com/chatbot'
+        : 'http://localhost:5000/chatbot';
+      
+      console.log('Sending request to:', apiUrl);
+      console.log('Request data:', { message: userMessage, emotion: emotion || 'neutral' });
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -52,15 +60,32 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
         }),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
       if (!response.ok) {
-        throw new Error('Failed to get response from chatbot');
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Failed to get response from chatbot: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse JSON:', parseError);
+        console.error('Response text:', responseText);
+        throw new Error('Server returned invalid JSON response');
+      }
+      
+      console.log('Parsed response:', data);
       return data.reply;
     } catch (error) {
       console.error('Error sending message to backend:', error);
-      return "I'm sorry, I'm having trouble connecting right now. Please try again later.";
+      return `I'm sorry, I'm having trouble connecting right now. Error: ${error.message}`;
     }
   };
 
