@@ -15,7 +15,17 @@ from datetime import datetime
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__, static_folder='../frontend/dist', static_url_path='')
+# Configure static folder - handle both local and Render environments
+static_folder_path = '../frontend/dist'
+if not os.path.exists(static_folder_path):
+    # Try alternative path for Render
+    static_folder_path = './frontend/dist'
+    if not os.path.exists(static_folder_path):
+        static_folder_path = '../frontend/dist'  # Fallback
+
+app = Flask(__name__, static_folder=static_folder_path, static_url_path='')
+print(f"Static folder configured as: {static_folder_path}")
+print(f"Static folder exists: {os.path.exists(static_folder_path)}")
 
 # Configure CORS based on environment
 if os.getenv('FLASK_ENV') == 'production':
@@ -84,6 +94,11 @@ except Exception as e:
 
 @app.route('/api/predict', methods=['POST'])
 def predict_emotion():
+    print("=== PREDICT ENDPOINT CALLED ===")
+    print(f"Request method: {request.method}")
+    print(f"Request URL: {request.url}")
+    print(f"Request headers: {dict(request.headers)}")
+    print(f"Request files: {list(request.files.keys()) if request.files else 'No files'}")
     """Predict emotion from uploaded image"""
     try:
         print("Received emotion prediction request")
@@ -117,6 +132,11 @@ def predict_emotion():
 
 @app.route('/api/chatbot', methods=['POST'])
 def chatbot():
+    print("=== CHATBOT ENDPOINT CALLED ===")
+    print(f"Request method: {request.method}")
+    print(f"Request URL: {request.url}")
+    print(f"Request headers: {dict(request.headers)}")
+    print(f"Request JSON: {request.get_json() if request.is_json else 'Not JSON'}")
     """Handle chatbot conversations"""
     try:
         print("Received chatbot request")
