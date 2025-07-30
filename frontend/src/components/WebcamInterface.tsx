@@ -8,7 +8,6 @@ interface EmotionData {
   emotion: string;
   confidence: number;
   color: string;
-  allEmotions?: { [key: string]: number };
 }
 
 interface WebcamInterfaceProps {
@@ -64,7 +63,7 @@ export const WebcamInterface = ({ onEmotionDetected }: WebcamInterfaceProps) => 
         // Use localhost for development, deployed URL for production
         const apiUrl = process.env.NODE_ENV === 'production'
           ? '/api/predict'
-          : 'http://localhost:5000/api/predict';
+          : '/api/predict';
           
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -76,8 +75,7 @@ export const WebcamInterface = ({ onEmotionDetected }: WebcamInterfaceProps) => 
           const emotionData: EmotionData = {
             emotion: result.emotion,
             confidence: result.confidence,
-            color: getEmotionColor(result.emotion),
-            allEmotions: result.all_predictions || {}
+            color: getEmotionColor(result.emotion)
           };
           
           setDetectedEmotion(emotionData);
@@ -93,92 +91,28 @@ export const WebcamInterface = ({ onEmotionDetected }: WebcamInterfaceProps) => 
 
   const startCamera = async () => {
     try {
-      console.log('Requesting camera access...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: 640, height: 480 } 
+      });
       
-      // Try different camera constraints in order of preference
-      const constraints = [
-        { 
-          video: { 
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            facingMode: 'user'
-          } 
-        },
-        { video: { facingMode: 'user' } },
-        { video: true }
-      ];
-      
-      let stream = null;
-      let lastError = null;
-      
-      for (const constraint of constraints) {
-        try {
-          console.log('Trying constraint:', constraint);
-          stream = await navigator.mediaDevices.getUserMedia(constraint);
-          console.log('Success with constraint:', constraint);
-          break;
-        } catch (err) {
-          console.log('Failed with constraint:', constraint, 'Error:', err);
-          lastError = err;
-        }
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        setIsActive(true);
+        
+        // Start emotion detection every 3 seconds
+        const interval = setInterval(() => {
+          if (isActive) {
+            captureFrame();
+          }
+        }, 3000);
+        
+        // Store interval for cleanup
+        (videoRef.current as any).emotionInterval = interval;
       }
-      
-      if (!stream) {
-        throw lastError || new Error('All camera constraints failed');
-      }
-      
-      console.log('Camera stream obtained:', stream);
-      console.log('Checking video element reference...');
-      console.log('videoRef.current:', videoRef.current);
-      
-      // Set active first so React renders the video element
-      setIsActive(true);
-      console.log('Set isActive to true, video element should render now');
-      
-      // If video element doesn't exist, wait and retry
-      const setupVideo = () => {
-        if (videoRef.current) {
-          console.log('Video element found, setting up...');
-          videoRef.current.srcObject = stream;
-          streamRef.current = stream;
-          
-          videoRef.current.play().then(() => {
-            console.log('Video playing successfully');
-            // Start emotion detection every 1 second for more frequent updates
-            const interval = setInterval(() => {
-              captureFrame();
-            }, 1000);
-            (videoRef.current as any).emotionInterval = interval;
-          }).catch(console.error);
-        } else {
-          console.log('Video element still not found, retrying in 100ms...');
-          setTimeout(setupVideo, 100);
-        }
-      };
-      
-      setupVideo();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error accessing camera:', error);
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-      
-      let errorMessage = 'Unable to access camera. ';
-      
-      if (error.name === 'NotAllowedError') {
-        errorMessage += 'Please allow camera permissions when prompted.';
-      } else if (error.name === 'NotFoundError') {
-        errorMessage += 'No camera found on this device.';
-      } else if (error.name === 'NotReadableError') {
-        errorMessage += 'Camera is already in use by another application.';
-      } else if (error.name === 'OverconstrainedError') {
-        errorMessage += 'Camera does not support the requested settings.';
-      } else if (error.name === 'SecurityError') {
-        errorMessage += 'Camera access blocked due to security restrictions. Try using HTTPS.';
-      } else {
-        errorMessage += `Error: ${error.message || 'Unknown error'}`;
-      }
-      
-      alert(errorMessage);
+      alert('Unable to access camera. Please ensure you have granted camera permissions.');
     }
   };
 
@@ -220,12 +154,6 @@ export const WebcamInterface = ({ onEmotionDetected }: WebcamInterfaceProps) => 
                 playsInline
                 muted
                 className="w-full h-full object-cover"
-                style={{ minHeight: '300px', backgroundColor: '#000', border: '2px solid red' }}
-                onCanPlay={() => console.log('Video can play')}
-                onPlay={() => console.log('Video started playing')}
-                onLoadedData={() => console.log('Video loaded data')}
-                onLoadedMetadata={() => console.log('Video loaded metadata')}
-                onError={(e) => console.error('Video error:', e)}
               />
               <canvas
                 ref={canvasRef}
@@ -282,13 +210,11 @@ export const WebcamInterface = ({ onEmotionDetected }: WebcamInterfaceProps) => 
           )}
         </Button>
 
-        {/* Emotion Analysis */}
+        {/* Emotion History */}
         {detectedEmotion && (
           <Card className="p-4 bg-card border-border shadow-card">
-            <h3 className="font-semibold mb-3 text-card-foreground">Emotion Analysis</h3>
-            
-            {/* Primary Emotion */}
-            <div className="space-y-2 mb-4">
+            <h3 className="font-semibold mb-3 text-card-foreground">Current Mood</h3>
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Primary Emotion:</span>
                 <span className={`font-medium ${detectedEmotion.color}`}>
@@ -302,36 +228,6 @@ export const WebcamInterface = ({ onEmotionDetected }: WebcamInterfaceProps) => 
                 />
               </div>
             </div>
-            
-            {/* All Emotions */}
-            {detectedEmotion.allEmotions && Object.keys(detectedEmotion.allEmotions).length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium text-card-foreground mb-2">All Detected Emotions:</h4>
-                <div className="space-y-1">
-                  {Object.entries(detectedEmotion.allEmotions)
-                    .sort(([,a], [,b]) => b - a)
-                    .map(([emotion, confidence]) => (
-                      <div key={emotion} className="flex items-center justify-between text-xs">
-                        <span className={`capitalize ${getEmotionColor(emotion)}`}>
-                          {emotion}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 bg-muted rounded-full h-1">
-                            <div
-                              className="bg-primary h-1 rounded-full transition-all duration-300"
-                              style={{ width: `${confidence * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-muted-foreground w-8 text-right">
-                            {Math.round(confidence * 100)}%
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  }
-                </div>
-              </div>
-            )}
           </Card>
         )}
       </div>

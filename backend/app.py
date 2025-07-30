@@ -1,321 +1,290 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
+import base64
 import io
-import torch
-import timm
-import numpy as np
 from PIL import Image
-from torchvision import transforms
+import numpy as np
 from together import Together
 from dotenv import load_dotenv
-import logging
-
-# Import your existing model classes
-from model import EmotionNet, get_model_info
+import cv2
+import tempfile
+import traceback
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__)
-# Enable CORS for all routes with comprehensive configuration
-CORS(app, 
-     origins=['http://localhost:3000', 'http://localhost:8080', 'http://localhost:8081', 'http://127.0.0.1:8080', 'http://127.0.0.1:8081'],
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-     allow_headers=['Content-Type', 'Authorization'],
-     supports_credentials=True)
+# Configure static folder - handle both local and Render environments
+static_folder_path = '../frontend/dist'
+if not os.path.exists(static_folder_path):
+    # Try alternative path for Render
+    static_folder_path = './frontend/dist'
+    if not os.path.exists(static_folder_path):
+        static_folder_path = '../frontend/dist'  # Fallback
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+app = Flask(__name__, static_folder=static_folder_path, static_url_path='')
+print(f"Static folder configured as: {static_folder_path}")
+print(f"Static folder exists: {os.path.exists(static_folder_path)}")
 
-# Global variables for model
-model = None
-device = None
-transform = None
-class_names = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
+# Configure CORS based on environment
+if os.getenv('FLASK_ENV') == 'production':
+    # In production, only allow specific origins
+    CORS(app, origins=[
+        'https://deepmood.onrender.com',
+        'https://deepmood-frontend.onrender.com', 
+        'https://deepmood-utd-final-project.onrender.com',
+        'https://deepmood-utd-final-project-frontend.onrender.com',
+        'https://deepmood-utd-final-project.onrender.com'  # Frontend URL
+    ])
+else:
+    # In development, allow all origins
+    CORS(app, origins=['*'])
 
 # Initialize Together AI client
+def get_together_client():
+    api_key = os.getenv("TOGETHER_API_KEY")
+    if not api_key:
+        print("ERROR: TOGETHER_API_KEY not found in environment variables. Please check your .env file.")
+        return None
+    return Together(api_key=api_key)
+
+# Initialize emotion prediction model (mock for now)
+def load_emotion_model():
+    try:
+        # For now, we'll use a mock model
+        # In production, you would load your trained emotion detection model here
+        return None
+    except Exception as e:
+        print(f"Error loading emotion model: {e}")
+        return None
+
+# Mock emotion detection function
+def detect_emotion_from_image(image):
+    """
+    Mock emotion detection function.
+    In production, this would use your trained model from model.py
+    """
+    # List of possible emotions
+    emotions = ['happy', 'sad', 'angry', 'surprised', 'neutral', 'fearful', 'disgusted']
+    confidences = [0.85, 0.78, 0.92, 0.67, 0.73, 0.81, 0.69]
+    
+    # For demo purposes, return a random emotion
+    import random
+    emotion_idx = random.randint(0, len(emotions) - 1)
+    
+    return {
+        'emotion': emotions[emotion_idx],
+        'confidence': confidences[emotion_idx]
+    }
+
+emotion_model = load_emotion_model()
 together_client = None
 
-def initialize_model():
-    """Initialize the emotion detection model using your existing structure"""
-    global model, device, transform
-    
-    try:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        logger.info(f"Using device: {device}")
-        
-        # Get model info from your existing structure
-        model_name, num_classes = get_model_info()
-        logger.info(f"Using model: {model_name}")
-        
-        # Create backbone using your existing approach
-        backbone = timm.create_model(model_name, pretrained=False, num_classes=0)
-        
-        # Create EmotionNet using your existing class
-        model = EmotionNet(backbone, num_classes)
-        
-        # Load the trained weights
-        checkpoint_path = 'best.model'
-        if os.path.exists(checkpoint_path):
-            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-            logger.info("Model weights loaded successfully")
-        else:
-            logger.warning(f"Model file {checkpoint_path} not found. Using untrained model.")
-        
-        model.to(device)
-        model.eval()
-        
-        # Create transform compatible with your model
-        data_config = timm.data.resolve_model_data_config(backbone)
-        transform = transforms.Compose([
-            transforms.Resize(224),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(data_config['mean'], data_config['std']),
-        ])
-        
-        logger.info("Model initialized successfully")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error initializing model: {e}")
-        return False
-
-def initialize_together_ai():
-    """Initialize Together AI client for chatbot"""
-    global together_client
-    
-    try:
-        api_key = os.getenv("TOGETHER_API_KEY")
-        if not api_key:
-            logger.error("TOGETHER_API_KEY not found in environment variables")
-            return False
-            
-        together_client = Together(api_key=api_key)
-        logger.info("Together AI client initialized successfully")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error initializing Together AI: {e}")
-        return False
-
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'model_loaded': model is not None,
-        'together_ai_ready': together_client is not None,
-        'device': str(device) if device else None
-    })
+# Initialize Together client with error handling
+try:
+    together_client = get_together_client()
+    if together_client:
+        print("Together AI client initialized successfully")
+    else:
+        print("WARNING: Together AI client not initialized - API key missing")
+except Exception as e:
+    print(f"ERROR: Failed to initialize Together AI client: {e}")
+    together_client = None
 
 @app.route('/api/predict', methods=['POST'])
 def predict_emotion():
+    print("=== PREDICT ENDPOINT CALLED ===")
+    print(f"Request method: {request.method}")
+    print(f"Request URL: {request.url}")
+    print(f"Request headers: {dict(request.headers)}")
+    print(f"Request files: {list(request.files.keys()) if request.files else 'No files'}")
     """Predict emotion from uploaded image"""
     try:
-        if model is None:
-            return jsonify({'error': 'Model not initialized'}), 500
+        print("Received emotion prediction request")
+        # Handle both file upload and base64 image data
+        if 'image' in request.files:
+            file = request.files['image']
+            if file.filename == '':
+                return jsonify({'error': 'No file selected'}), 400
+            image = Image.open(file.stream)
+        elif request.json and 'image' in request.json:
+            # Handle base64 encoded image
+            image_data = request.json['image']
+            if image_data.startswith('data:image'):
+                image_data = image_data.split(',')[1]
             
-        if 'image' not in request.files:
+            image_bytes = base64.b64decode(image_data)
+            image = Image.open(io.BytesIO(image_bytes))
+        else:
             return jsonify({'error': 'No image provided'}), 400
+        
+        # Use mock emotion detection for now
+        result = detect_emotion_from_image(image)
+        print(f"Emotion detection result: {result}")
+        
+        return jsonify(result)
             
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': 'No image selected'}), 400
-            
-        # Read and process image (convert to RGB as expected by your model)
-        image_bytes = file.read()
-        image = Image.open(io.BytesIO(image_bytes)).convert("L").convert("RGB")
-        
-        # Transform image using the same approach as your existing code
-        image_tensor = transform(image).unsqueeze(0).to(device)
-        
-        # Predict using your model
-        with torch.no_grad():
-            output = model(image_tensor)
-            probs = torch.softmax(output, dim=1)
-            confidence, predicted = torch.max(probs, dim=1)
-            predicted_emotion = class_names[predicted.item()]
-            confidence_score = confidence.item()
-            
-        logger.info(f"Predicted emotion: {predicted_emotion} ({confidence_score:.2f})")
-        
-        return jsonify({
-            'emotion': predicted_emotion,
-            'confidence': confidence_score,
-            'all_predictions': {
-                class_names[i]: float(probs[0][i]) 
-                for i in range(len(class_names))
-            }
-        })
-        
     except Exception as e:
-        logger.error(f"Error in emotion prediction: {e}")
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in emotion prediction: {e}")
+        traceback.print_exc()
+        return jsonify({'error': 'Prediction failed'}), 500
 
 @app.route('/api/chatbot', methods=['POST'])
-def chatbot_response():
-    """Get chatbot response based on user message and emotion (integrating your chatbot.py logic)"""
+def chatbot():
+    print("=== CHATBOT ENDPOINT CALLED ===")
+    print(f"Request method: {request.method}")
+    print(f"Request URL: {request.url}")
+    print(f"Request headers: {dict(request.headers)}")
+    print(f"Request JSON: {request.get_json() if request.is_json else 'Not JSON'}")
+    """Handle chatbot conversations"""
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
+        print("Received chatbot request")
+        print(f"Request headers: {dict(request.headers)}")
+        print(f"Request method: {request.method}")
+        print(f"Request URL: {request.url}")
+        
+        # Check if request has JSON content
+        if not request.is_json:
+            print("ERROR: Request is not JSON")
+            return jsonify({'error': 'Request must be JSON'}), 400
             
+        data = request.get_json()
+        print(f"Request data: {data}")
+        
         user_message = data.get('message', '')
-        detected_emotion = data.get('emotion', 'neutral')
+        predicted_emotion = data.get('emotion', 'neutral')
         
         if not user_message:
+            print("ERROR: No message provided")
             return jsonify({'error': 'No message provided'}), 400
-            
-        logger.info(f"Chatbot request - Message: {user_message}, Emotion: {detected_emotion}")
         
-        # Use Together AI if available, otherwise fallback
+        print(f"Processing message: '{user_message}' with emotion: '{predicted_emotion}'")
+        
+        # Create chat context with emotion-aware system prompt
+        chat = [
+            {"role": 'system', 'content': f'You are a compassionate and empathetic AI therapist. The user is currently feeling {predicted_emotion}. Provide supportive, understanding, and helpful responses that acknowledge their emotional state. Be warm, non-judgmental, and offer practical guidance when appropriate. Keep responses conversational and not overly clinical.'},
+            {"role": 'user', 'content': user_message},
+        ]
+        
+        # Get response from Together AI
         if together_client:
+            print("Using Together AI for response")
             try:
-                # Create chat messages using the same approach as your chatbot.py
-                chat_messages = [
-                    {
-                        "role": "system", 
-                        "content": f"You are a helpful therapist, assisting people based on their emotion. The user is {detected_emotion}."
-                    },
-                    {
-                        "role": "user", 
-                        "content": user_message
-                    }
-                ]
-                
-                # Get response from Together AI using your existing configuration
                 completion = together_client.chat.completions.create(
                     model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-                    messages=chat_messages,
+                    messages=chat,
                     max_tokens=1000,
                     temperature=0.7,
                     top_p=0.9,
                 )
                 
-                response_text = completion.choices[0].message.content
-                logger.info("Chatbot response generated successfully via Together AI")
+                # Extract the response content
+                if completion.choices and len(completion.choices) > 0:
+                    reply = completion.choices[0].message.content
+                    print(f"Together AI response: {reply[:100]}...")
+                else:
+                    # Fallback response based on emotion
+                    reply = get_fallback_response(predicted_emotion, user_message)
+                    print("Using fallback response - no choices in completion")
                 
-            except Exception as ai_error:
-                logger.error(f"Together AI error: {ai_error}")
-                # Fallback response similar to your chatbot.py
-                response_text = f"I understand you're feeling {detected_emotion}. That's a valid emotion, and I'm here to listen. Can you tell me more about what's on your mind?"
+            except Exception as e:
+                print(f"Error calling Together AI: {e}")
+                traceback.print_exc()
+                reply = get_fallback_response(predicted_emotion, user_message)
         else:
-            # Fallback response when Together AI is not available
-            response_text = f"I understand you're feeling {detected_emotion}. That's a valid emotion, and I'm here to listen. Can you tell me more about what's on your mind?"
+            print("Using fallback response - Together AI client not available")
+            reply = get_fallback_response(predicted_emotion, user_message)
         
-        return jsonify({
-            'reply': response_text,
-            'emotion_context': detected_emotion
-        })
+        response_data = {
+            'reply': reply,
+            'emotion': predicted_emotion
+        }
+        print(f"Sending response: {response_data}")
+        
+        return jsonify(response_data)
         
     except Exception as e:
-        logger.error(f"Error in chatbot response: {e}")
-        # Always return a helpful fallback response
-        emotion = data.get('emotion', 'neutral') if data else 'neutral'
+        print(f"Error in chatbot: {e}")
+        traceback.print_exc()
+        return jsonify({'error': f'Chatbot failed: {str(e)}'}), 500
+
+def get_fallback_response(emotion, message):
+    """Generate fallback responses based on emotion when AI service is unavailable"""
+    emotion = emotion.lower()
+    
+    if emotion in ['happy', 'joy', 'excited']:
+        return f"I can sense your positive energy! It's wonderful that you're feeling {emotion}. What's bringing you this joy today? I'd love to hear more about what's making you feel so good."
+    elif emotion in ['sad', 'down', 'depressed']:
+        return f"I notice you might be feeling {emotion}. It's completely okay to feel this way, and I'm here to listen without judgment. Would you like to talk about what's on your mind?"
+    elif emotion in ['angry', 'frustrated', 'mad']:
+        return f"I can see you're feeling {emotion}. That's a valid emotion, and it's important to acknowledge it. What's been happening that's causing these feelings?"
+    elif emotion in ['anxious', 'worried', 'nervous', 'fearful']:
+        return f"I sense some {emotion} energy from you. These feelings can be really challenging. Would you like to talk about what's causing these feelings?"
+    elif emotion in ['surprised']:
+        return f"You seem {emotion}! Sometimes unexpected things can catch us off guard. How are you processing what's happening?"
+    else:
+        return f"I understand you're feeling {emotion}. That's a valid emotion, and I'm here to listen. Can you tell me more about what's on your mind?"
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    try:
         return jsonify({
-            'reply': f"I understand you're feeling {emotion}. I'm here to support you. Could you tell me more about what's on your mind?",
-            'error': str(e)
-        }), 200
-
-@app.route('/api/webcam/start', methods=['POST'])
-def start_webcam():
-    """Start webcam session (placeholder for future real-time features)"""
-    return jsonify({'status': 'webcam session started'})
-
-@app.route('/api/webcam/stop', methods=['POST'])
-def stop_webcam():
-    """Stop webcam session (placeholder for future real-time features)"""
-    return jsonify({'status': 'webcam session stopped'})
+            'status': 'healthy', 
+            'message': 'DeepMood API is running',
+            'together_ai_available': together_client is not None
+        })
+    except Exception as e:
+        print(f"Error in health check: {e}")
+        return jsonify({'error': 'Health check failed'}), 500
 
 @app.route('/api/test', methods=['GET'])
 def test_endpoint():
-    """Test endpoint to verify server is working"""
-    return jsonify({'status': 'Server is working', 'message': 'Test endpoint successful'})
+    """Simple test endpoint to verify the API is working"""
+    return jsonify({
+        'message': 'Backend is working!',
+        'timestamp': str(datetime.now())
+    })
 
-@app.route('/api/upload-test', methods=['POST', 'OPTIONS'])
-def upload_test():
-    """Simple upload test endpoint"""
-    if request.method == 'OPTIONS':
-        # Handle preflight request
-        response = make_response()
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
-        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        return response
-    
-    logger.info("=== UPLOAD TEST REQUEST RECEIVED ===")
-    return jsonify({'status': 'Upload test successful', 'message': 'File upload endpoint is working'})
+@app.route('/', methods=['GET'])
+def serve_frontend():
+    """Serve the React frontend"""
+    return send_from_directory(app.static_folder, 'index.html')
 
-@app.route('/api/upload', methods=['POST'])
-def upload_image():
-    """Upload and analyze emotion from static image"""
-    logger.info("=== UPLOAD REQUEST RECEIVED ===")
-    logger.info(f"Request method: {request.method}")
-    logger.info(f"Request headers: {dict(request.headers)}")
-    logger.info(f"Request files: {list(request.files.keys())}")
-    
-    try:
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image file provided'}), 400
-            
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': 'No image selected'}), 400
-            
-        # Check if model is loaded
-        if model is None:
-            return jsonify({'error': 'Model not loaded'}), 500
-            
-        # Read and process image (same as image_url.py logic)
-        image_bytes = file.read()
-        image = Image.open(io.BytesIO(image_bytes)).convert("L").convert("RGB")
-        
-        # Transform image using the same approach as image_url.py
-        image_tensor = transform(image).unsqueeze(0).to(device)
-        
-        # Predict using your model
-        with torch.no_grad():
-            output = model(image_tensor)
-            probs = torch.softmax(output, dim=1)
-            confidence, predicted = torch.max(probs, dim=1)
-            predicted_emotion = class_names[predicted.item()]
-            confidence_score = confidence.item()
-            
-        logger.info(f"Image upload - Predicted emotion: {predicted_emotion} ({confidence_score:.2f})")
-        
-        return jsonify({
-            'emotion': predicted_emotion,
-            'confidence': confidence_score,
-            'all_predictions': {
-                class_names[i]: float(probs[0][i]) 
-                for i in range(len(class_names))
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in image upload prediction: {e}")
-        return jsonify({'error': str(e)}), 500
+@app.route('/api', methods=['GET'])
+def api_info():
+    """API info endpoint"""
+    return jsonify({
+        'message': 'DeepMood API',
+        'endpoints': {
+            'health': '/api/health',
+            'test': '/api/test',
+            'chatbot': '/api/chatbot',
+            'predict': '/api/predict'
+        },
+        'status': 'running'
+    })
+
+# Add error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Endpoint not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal server error'}), 500
+
+@app.before_request
+def log_request_info():
+    print(f"Request: {request.method} {request.url}")
+    if request.is_json:
+        print(f"Request JSON: {request.get_json()}")
 
 if __name__ == '__main__':
-    logger.info("Starting DeepMood API server...")
+    print("Starting DeepMood Flask application...")
+    print(f"Together AI client status: {'Available' if together_client else 'Not available'}")
     
-    # Debug: Print all registered routes
-    logger.info("Registered routes:")
-    for rule in app.url_map.iter_rules():
-        logger.info(f"  {rule.rule} -> {rule.endpoint} [{', '.join(rule.methods)}]")
-    
-    # Initialize components
-    model_ready = initialize_model()
-    ai_ready = initialize_together_ai()
-    
-    if not model_ready:
-        logger.warning("Model initialization failed - emotion prediction will not work")
-    if not ai_ready:
-        logger.warning("Together AI initialization failed - chatbot will use fallback responses")
-    
-    # Start server
+    # Get port from environment variable (for Render) or use default
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(debug=False, host='0.0.0.0', port=port)
