@@ -2,11 +2,15 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { WebcamInterface } from '@/components/WebcamInterface';
-import { Brain, Sparkles, MessageCircle, Camera } from 'lucide-react';
+import { ImageUpload } from '@/components/ImageUpload';
+import { Brain, Sparkles, MessageCircle, Camera, Upload as UploadIcon } from 'lucide-react';
+
+type TabType = 'webcam' | 'upload';
 
 const Index = () => {
   const [currentEmotion, setCurrentEmotion] = useState<string>();
   const [isDemoActive, setIsDemoActive] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('webcam');
 
   const handleEmotionDetected = (emotion: string) => {
     setCurrentEmotion(emotion);
@@ -81,9 +85,14 @@ const Index = () => {
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-primary to-accent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <Camera className="w-5 h-5 relative z-10" />
-                <span className="relative z-10">Start Demo</span>
+                <span className="relative z-10">Try Demo</span>
               </Button>
-              <Button variant="outline" size="lg" className="text-base border-primary/20 hover:border-primary/40 hover:bg-primary/5" onClick={() => window.location.href = '/chatbot'}>
+              <Button 
+                variant="outline" 
+                size="lg" 
+                className="text-base border-primary/20 hover:border-primary/40 hover:bg-primary/5" 
+                onClick={() => window.location.href = '/chatbot'}
+              >
                 <MessageCircle className="w-5 h-5" />
                 Chatbot
               </Button>
@@ -152,39 +161,80 @@ const Index = () => {
       </section>
 
       {/* Main Interface */}
-      <section id="demo" className="py-20">
+      <section id="demo" className="py-20 bg-muted/30">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              Try the Technology
-            </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Experience real-time emotion detection and AI conversation in action
+          <div className="max-w-4xl mx-auto text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">Try It Out</h2>
+            <p className="text-muted-foreground">
+              Test our emotion detection technology using your webcam or upload an image.
             </p>
           </div>
           
-          <div className="max-w-4xl mx-auto">
-            {/* Webcam Section */}
-            <Card className="p-8 bg-card border-border shadow-card">
-              <div className="flex items-center gap-3 mb-6">
-                <Camera className="w-6 h-6 text-primary" />
-                <h3 className="text-xl font-semibold text-card-foreground">
-                  Emotion Detection
-                </h3>
-                {isDemoActive && (
-                  <div className="ml-auto">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      Demo Active
-                    </span>
+          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+            {/* Tabs */}
+            <div className="flex border-b border-border">
+              <button
+                onClick={() => setActiveTab('webcam')}
+                className={`flex-1 py-4 px-6 text-center font-medium transition-colors ${
+                  activeTab === 'webcam'
+                    ? 'text-primary border-b-2 border-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Camera className="w-5 h-5" />
+                  <span>Webcam</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('upload')}
+                className={`flex-1 py-4 px-6 text-center font-medium transition-colors ${
+                  activeTab === 'upload'
+                    ? 'text-primary border-b-2 border-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <UploadIcon className="w-5 h-5" />
+                  <span>Upload Image</span>
+                </div>
+              </button>
+            </div>
+            
+            {/* Tab Content */}
+            <div className="p-6">
+              {activeTab === 'webcam' ? (
+                <>
+                  <div className="flex items-center gap-3 mb-6">
+                    <Camera className="w-6 h-6 text-primary" />
+                    <h3 className="text-xl font-semibold">Webcam Demo</h3>
+                    {isDemoActive && (
+                      <div className="ml-auto">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Demo Active
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <p className="text-muted-foreground mb-6">
-                Enable your camera to analyze facial expressions and detect emotional states in real-time.
-              </p>
-              <WebcamInterface onEmotionDetected={handleEmotionDetected} />
+                  <p className="text-muted-foreground mb-6">
+                    Enable your camera to analyze facial expressions and detect emotional states in real-time.
+                  </p>
+                  <WebcamInterface onEmotionDetected={handleEmotionDetected} />
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-6">
+                    <UploadIcon className="w-6 h-6 text-primary" />
+                    <h3 className="text-xl font-semibold">Upload an Image</h3>
+                  </div>
+                  <p className="text-muted-foreground mb-6">
+                    Upload a photo to analyze facial expressions and detect emotional states.
+                  </p>
+                  <ImageUpload onEmotionDetected={handleEmotionDetected} />
+                </>
+              )}
               
-              {/* Chatbot Button at bottom of camera section */}
+              {/* Chatbot Button */}
               <div className="mt-8 pt-6 border-t border-border">
                 <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
                   <div className="text-center sm:text-left">
@@ -216,7 +266,7 @@ const Index = () => {
                   </div>
                 </div>
               </div>
-            </Card>
+            </div>
           </div>
         </div>
       </section>
