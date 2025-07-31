@@ -56,15 +56,41 @@ def initialize_model():
         # Create EmotionNet using your existing class
         model = EmotionNet(backbone, num_classes)
         
-        # Load the trained weights
-        checkpoint_path = 'best.model'
+        # Load the trained weights - handle float16 model
+        checkpoint_path = 'best_model_float16.pth'
         if os.path.exists(checkpoint_path):
-            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-            logger.info("Model weights loaded successfully")
+            try:
+                # Load checkpoint to the specified device (CPU/GPU)
+                checkpoint = torch.load(checkpoint_path, map_location=device)
+                
+                # Handle state dict from checkpoint
+                if 'state_dict' in checkpoint:
+                    state_dict = checkpoint['state_dict']
+                elif 'model_state_dict' in checkpoint:
+                    state_dict = checkpoint['model_state_dict']
+                else:
+                    state_dict = checkpoint
+                
+                # Clean up state dict keys (remove 'module.' prefix if present from DataParallel)
+                state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+                
+                # Load the state dict
+                model.load_state_dict(state_dict, strict=False)
+                logger.info("Float16 model weights loaded successfully")
+                
+                # Convert model to float16 for inference
+                model = model.half()
+                
+                # Move model to the appropriate device
+                model = model.to(device)
+                
+            except Exception as e:
+                logger.error(f"Error loading float16 model weights: {str(e)}")
+                return False
         else:
-            logger.warning(f"Model file {checkpoint_path} not found. Using untrained model.")
+            logger.error(f"Model file {checkpoint_path} not found.")
+            return False
         
-        model.to(device)
         model.eval()
         
         # Create transform compatible with your model
@@ -129,8 +155,9 @@ def predict_emotion():
         image_bytes = file.read()
         image = Image.open(io.BytesIO(image_bytes)).convert("L").convert("RGB")
         
-        # Transform image using the same approach as your existing code
+        # Transform image and convert to float16 to match model precision
         image_tensor = transform(image).unsqueeze(0).to(device)
+        image_tensor = image_tensor.half()  # Convert to float16
         
         # Predict using your model
         with torch.no_grad():
@@ -273,8 +300,9 @@ def upload_image():
         image_bytes = file.read()
         image = Image.open(io.BytesIO(image_bytes)).convert("L").convert("RGB")
         
-        # Transform image using the same approach as image_url.py
+        # Transform image and convert to float16 to match model precision
         image_tensor = transform(image).unsqueeze(0).to(device)
+        image_tensor = image_tensor.half()  # Convert to float16
         
         # Predict using your model
         with torch.no_grad():
