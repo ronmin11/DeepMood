@@ -43,7 +43,7 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
     try {
       const apiUrl = process.env.NODE_ENV === 'production' 
         ? '/api/health'
-        : 'http://localhost:5000/api/health';
+        : '/api/health';
       
       console.log('Testing backend connection to:', apiUrl);
       
@@ -79,7 +79,7 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
       // Use localhost for development, deployed URL for production
       const apiUrl = process.env.NODE_ENV === 'production' 
         ? '/api/chatbot'
-        : 'https://deep-mood.vercel.app/';
+        : '/api/chatbot';
       
       console.log('Environment:', process.env.NODE_ENV);
       console.log('Sending request to:', apiUrl);
