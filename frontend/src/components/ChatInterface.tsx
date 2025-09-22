@@ -79,7 +79,7 @@ export const ChatInterface = ({ detectedEmotion }: ChatInterfaceProps) => {
       // Use localhost for development, deployed URL for production
       const apiUrl = process.env.NODE_ENV === 'production' 
         ? '/api/chatbot'
-        : 'http://localhost:5000/api/chatbot';
+        : 'https://deep-mood.vercel.app/';
       
       console.log('Environment:', process.env.NODE_ENV);
       console.log('Sending request to:', apiUrl);

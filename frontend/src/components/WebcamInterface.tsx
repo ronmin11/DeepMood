@@ -64,7 +64,7 @@ export const WebcamInterface = ({ onEmotionDetected }: WebcamInterfaceProps) => 
         // Use localhost for development, deployed URL for production
         const apiUrl = process.env.NODE_ENV === 'production'
           ? '/api/predict'
-          : 'http://localhost:5000/api/predict';
+          : 'https://deep-mood.vercel.app/';
           
         const response = await fetch(apiUrl, {
           method: 'POST',

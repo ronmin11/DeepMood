@@ -20,7 +20,7 @@ load_dotenv()
 app = Flask(__name__)
 # Enable CORS for all routes with comprehensive configuration
 CORS(app, 
-     origins=['http://localhost:3000', 'http://localhost:8080', 'http://localhost:8081', 'http://127.0.0.1:8080', 'http://127.0.0.1:8081'],
+     origins=['http://localhost:3000', 'http://localhost:8080', 'http://localhost:8081', 'http://127.0.0.1:8080', 'http://127.0.0.1:8081', "https://deep-mood.vercel.app/"],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
      allow_headers=['Content-Type', 'Authorization'],
      supports_credentials=True)
@@ -39,74 +39,103 @@ class_names = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'
 together_client = None
 
 def initialize_model():
-    """Initialize the emotion detection model using your existing structure"""
+    """Initialize the emotion detection model using the pre-trained ResNet50 model"""
     global model, device, transform
     
     try:
+        logger.info("Initializing model...")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"Using device: {device}")
         
-        # Get model info from your existing structure
-        model_name, num_classes = get_model_info()
-        logger.info(f"Using model: {model_name}")
-        
-        # Create backbone using your existing approach
-        backbone = timm.create_model(model_name, pretrained=False, num_classes=0)
-        
-        # Create EmotionNet using your existing class
-        model = EmotionNet(backbone, num_classes)
-        
-        # Load the trained weights - handle float16 model
-        checkpoint_path = 'best_model_float16.pth'
-        if os.path.exists(checkpoint_path):
-            try:
-                # Load checkpoint to the specified device (CPU/GPU)
-                checkpoint = torch.load(checkpoint_path, map_location=device)
-                
-                # Handle state dict from checkpoint
-                if 'state_dict' in checkpoint:
-                    state_dict = checkpoint['state_dict']
-                elif 'model_state_dict' in checkpoint:
-                    state_dict = checkpoint['model_state_dict']
-                else:
-                    state_dict = checkpoint
-                
-                # Clean up state dict keys (remove 'module.' prefix if present from DataParallel)
-                state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
-                
-                # Load the state dict
-                model.load_state_dict(state_dict, strict=False)
-                logger.info("Float16 model weights loaded successfully")
-                
-                # Convert model to float16 for inference
-                model = model.half()
-                
-                # Move model to the appropriate device
-                model = model.to(device)
-                
-            except Exception as e:
-                logger.error(f"Error loading float16 model weights: {str(e)}")
-                return False
-        else:
-            logger.error(f"Model file {checkpoint_path} not found.")
-            return False
-        
-        model.eval()
-        
-        # Create transform compatible with your model
-        data_config = timm.data.resolve_model_data_config(backbone)
+        # Initialize transform first with default values
         transform = transforms.Compose([
-            transforms.Resize(224),
+            transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            transforms.Normalize(data_config['mean'], data_config['std']),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
+                              std=[0.229, 0.224, 0.225])
         ])
+        logger.info("Default transforms initialized")
         
-        logger.info("Model initialized successfully")
-        return True
+        # Define the model architecture - using standard ResNet50
+        logger.info("Creating ResNet50 model...")
+        model = timm.create_model('resnet50', pretrained=False, num_classes=7)  # 7 emotion classes
+        logger.info("Model created successfully")
         
+        # Load the pre-trained weights
+        model_path = 'resnet50.model'
+        logger.info(f"Looking for model file at: {os.path.abspath(model_path)}")
+        
+        if not os.path.exists(model_path):
+            logger.error(f"Model file not found at: {os.path.abspath(model_path)}")
+            return False
+            
+        logger.info(f"Model file found. Size: {os.path.getsize(model_path) / (1024*1024):.2f} MB")
+        
+        try:
+            # Load the model weights
+            logger.info("Loading model weights...")
+            checkpoint = torch.load(model_path, map_location=device)
+            logger.info("Model weights loaded into memory")
+            
+            # Debug: Log checkpoint keys
+            logger.info(f"Checkpoint keys: {list(checkpoint.keys())}")
+            
+            # Handle different checkpoint formats
+            if 'state_dict' in checkpoint:
+                state_dict = checkpoint['state_dict']
+                logger.info("Found 'state_dict' in checkpoint")
+            elif 'model_state_dict' in checkpoint:
+                state_dict = checkpoint['model_state_dict']
+                logger.info("Found 'model_state_dict' in checkpoint")
+            else:
+                state_dict = checkpoint
+                logger.info("Using raw checkpoint as state_dict")
+            
+            # Debug: Log first few keys in state dict
+            logger.info(f"State dict first 5 keys: {list(state_dict.keys())[:5]}")
+            
+            # Clean up state dict keys (remove 'module.' prefix if present from DataParallel)
+            state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+            
+            # Load the state dict
+            logger.info("Loading state dict into model...")
+            model.load_state_dict(state_dict, strict=False)
+            logger.info("Model weights loaded successfully")
+            
+            # Set model to evaluation mode
+            model = model.to(device)
+            model.eval()
+            logger.info("Model moved to device and set to eval mode")
+            
+            # Try to get model-specific transform config
+            try:
+                data_config = timm.data.resolve_model_data_config(model)
+                logger.info(f"Model data config: {data_config}")
+                
+                # Update transform with model-specific normalization if available
+                if 'mean' in data_config and 'std' in data_config:
+                    transform = transforms.Compose([
+                        transforms.Resize(256),
+                        transforms.CenterCrop(224),
+                        transforms.ToTensor(),
+                        transforms.Normalize(mean=data_config['mean'], 
+                                          std=data_config['std'])
+                    ])
+                    logger.info("Updated transforms with model-specific normalization")
+                
+            except Exception as e:
+                logger.warning(f"Could not resolve model data config, using default transforms: {e}")
+            
+            logger.info("Model initialization completed successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error loading model weights: {str(e)}", exc_info=True)
+            return False
+            
     except Exception as e:
-        logger.error(f"Error initializing model: {e}")
+        logger.error(f"Error initializing model: {e}", exc_info=True)
         return False
 
 def initialize_together_ai():
@@ -286,46 +315,74 @@ def upload_image():
     
     try:
         if 'image' not in request.files:
+            logger.error("No image file in request")
             return jsonify({'error': 'No image file provided'}), 400
             
         file = request.files['image']
         if file.filename == '':
+            logger.error("Empty filename")
             return jsonify({'error': 'No image selected'}), 400
             
         # Check if model is loaded
         if model is None:
+            logger.error("Model not loaded")
             return jsonify({'error': 'Model not loaded'}), 500
+        
+        try:
+            # Read and process image (same as image_url.py logic)
+            logger.info("Reading image file...")
+            image_bytes = file.read()
+            logger.info(f"Image size: {len(image_bytes)} bytes")
             
-        # Read and process image (same as image_url.py logic)
-        image_bytes = file.read()
-        image = Image.open(io.BytesIO(image_bytes)).convert("L").convert("RGB")
-        
-        # Transform image and convert to float16 to match model precision
-        image_tensor = transform(image).unsqueeze(0).to(device)
-        image_tensor = image_tensor.half()  # Convert to float16
-        
-        # Predict using your model
-        with torch.no_grad():
-            output = model(image_tensor)
-            probs = torch.softmax(output, dim=1)
-            confidence, predicted = torch.max(probs, dim=1)
-            predicted_emotion = class_names[predicted.item()]
-            confidence_score = confidence.item()
+            logger.info("Opening and converting image...")
+            image = Image.open(io.BytesIO(image_bytes)).convert("L").convert("RGB")
+            logger.info(f"Image mode: {image.mode}, size: {image.size}")
             
-        logger.info(f"Image upload - Predicted emotion: {predicted_emotion} ({confidence_score:.2f})")
-        
-        return jsonify({
-            'emotion': predicted_emotion,
-            'confidence': confidence_score,
-            'all_predictions': {
-                class_names[i]: float(probs[0][i]) 
-                for i in range(len(class_names))
-            }
-        })
-        
+            logger.info("Applying transforms...")
+            image_tensor = transform(image)
+            logger.info(f"Transformed tensor shape: {image_tensor.shape}, dtype: {image_tensor.dtype}")
+            
+            # Add batch dimension and move to device
+            image_tensor = image_tensor.unsqueeze(0).to(device)
+            logger.info(f"Batch tensor shape: {image_tensor.shape}")
+            
+            # Convert to float16 if needed (uncomment if your model uses float16)
+            # image_tensor = image_tensor.half()  # Uncomment if using float16 model
+            
+            # Predict using your model
+            logger.info("Running inference...")
+            with torch.no_grad():
+                output = model(image_tensor)
+                logger.info(f"Model output shape: {output.shape}")
+                probs = torch.softmax(output, dim=1)
+                confidence, predicted = torch.max(probs, dim=1)
+                predicted_emotion = class_names[predicted.item()]
+                confidence_score = confidence.item()
+                
+            logger.info(f"Predicted emotion: {predicted_emotion} (confidence: {confidence_score:.2f})")
+            
+            return jsonify({
+                'emotion': predicted_emotion,
+                'confidence': confidence_score,
+                'all_predictions': {
+                    class_names[i]: float(probs[0][i]) 
+                    for i in range(len(class_names))
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error during image processing: {str(e)}", exc_info=True)
+            return jsonify({
+                'error': 'Error processing image',
+                'details': str(e)
+            }), 500
+            
     except Exception as e:
-        logger.error(f"Error in image upload prediction: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Unexpected error in upload_image: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Internal server error',
+            'details': str(e)
+        }), 500
 
 if __name__ == '__main__':
     logger.info("Starting DeepMood API server...")

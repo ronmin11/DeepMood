@@ -65,7 +65,7 @@ export const ImageUpload = ({ onEmotionDetected }: ImageUploadProps) => {
       setIsAnalyzing(true);
       
       // Direct connection to backend - bypass any proxy issues
-      const apiUrl = 'http://localhost:5000/api/upload';
+      const apiUrl = 'https://deep-mood.vercel.app/';
       
       // Add mode: 'cors' to explicitly handle cross-origin
         
